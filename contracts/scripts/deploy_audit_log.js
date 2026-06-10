@@ -1,0 +1,118 @@
+/**
+ * deploy_audit_log.js
+ * Deploys SignalAuditLog to Mantle Sepolia or Mantle mainnet.
+ *
+ * Usage:
+ *   npx hardhat run scripts/deploy_audit_log.js --network mantleSepolia
+ *   npx hardhat run scripts/deploy_audit_log.js --network mantle
+ *
+ * Required env vars:
+ *   DEPLOYER_PRIVATE_KEY   — deployer wallet key
+ *   LOGGER_WALLET_ADDRESS  — delivery worker wallet (optional; falls back to deployer)
+ */
+const { ethers, network } = require("hardhat");
+const fs   = require("fs");
+const path = require("path");
+
+async function main() {
+  // ── Preflight ──────────────────────────────────────────────────────────
+  const [deployer] = await ethers.getSigners();
+  const balance    = await deployer.provider.getBalance(deployer.address);
+  const loggerAddr = process.env.LOGGER_WALLET_ADDRESS || deployer.address;
+
+  console.log("\n──────────────────────────────────────────");
+  console.log("  Deploying SignalAuditLog");
+  console.log("──────────────────────────────────────────");
+  console.log(`  Network:   ${network.name} (chainId ${network.config.chainId})`);
+  console.log(`  Deployer:  ${deployer.address}`);
+  console.log(`  Balance:   ${ethers.formatEther(balance)} MNT`);
+  console.log(`  Logger:    ${loggerAddr}`);
+  console.log("──────────────────────────────────────────\n");
+
+  if (balance === 0n) {
+    throw new Error("Deployer wallet has 0 MNT. Fund it from the Mantle Sepolia faucet first.");
+  }
+
+  // ── Deploy ─────────────────────────────────────────────────────────────
+  console.log("Deploying…");
+  const Factory  = await ethers.getContractFactory("SignalAuditLog");
+  const contract = await Factory.deploy(loggerAddr);
+
+  process.stdout.write("Waiting for confirmation");
+  const deployTx = contract.deploymentTransaction();
+  const interval = setInterval(() => process.stdout.write("."), 1500);
+
+  await contract.waitForDeployment();
+  clearInterval(interval);
+  console.log(" done.\n");
+
+  const address = await contract.getAddress();
+  const txHash  = deployTx?.hash ?? "n/a";
+
+  // ── Verify deployment ──────────────────────────────────────────────────
+  const onChainLogger = await contract.authorisedLogger();
+  const onChainOwner  = await contract.owner();
+
+  console.log("  ✓ Contract deployed");
+  console.log(`    Address:  ${address}`);
+  console.log(`    Tx hash:  ${txHash}`);
+  console.log(`    Owner:    ${onChainOwner}`);
+  console.log(`    Logger:   ${onChainLogger}`);
+
+  // Quick smoke test: log one signal and verify it
+  console.log("\n  Running smoke test…");
+  const testPayload = JSON.stringify({
+    confidence: 99,
+    deliver_at: new Date().toISOString(),
+    id: 0,
+    pool: deployer.address,
+    protocol: "agni_finance",
+    signal_type: "accumulation",
+    summary: "Deployment smoke test signal.",
+  });
+  const testHash = ethers.keccak256(ethers.toUtf8Bytes(testPayload));
+
+  // Only attempt if deployer == logger
+  if (onChainLogger.toLowerCase() === deployer.address.toLowerCase()) {
+    const logTx = await contract.logSignal(testHash, "agni_finance", "accumulation", 99);
+    await logTx.wait();
+    const [valid] = await contract.verify(0, testPayload);
+    if (!valid) throw new Error("Smoke test FAILED: verify() returned false");
+    console.log("  ✓ Smoke test passed (logSignal + verify)");
+  } else {
+    console.log("  ○ Skipping smoke test (deployer ≠ logger)");
+  }
+
+  // ── Save receipt ───────────────────────────────────────────────────────
+  const receipt = {
+    network:      network.name,
+    chainId:      network.config.chainId,
+    contract:     "SignalAuditLog",
+    address,
+    txHash,
+    deployer:     deployer.address,
+    logger:       onChainLogger,
+    deployedAt:   new Date().toISOString(),
+  };
+
+  const outDir  = path.join(__dirname, `../deployments/${network.name}`);
+  const outPath = path.join(outDir, "SignalAuditLog.json");
+  fs.mkdirSync(outDir, { recursive: true });
+  fs.writeFileSync(outPath, JSON.stringify(receipt, null, 2));
+
+  // ── Instructions ───────────────────────────────────────────────────────
+  const explorerBase = network.name === "mantle"
+    ? "https://explorer.mantle.xyz"
+    : "https://explorer.sepolia.mantle.xyz";
+
+  console.log(`\n  ✓ Receipt saved: ${outPath}`);
+  console.log(`\n  Explorer: ${explorerBase}/address/${address}`);
+  console.log(`\n  ─── Add to your .env ───────────────────`);
+  console.log(`  AUDIT_CONTRACT_ADDRESS=${address}`);
+  console.log(`  ────────────────────────────────────────\n`);
+}
+
+main().catch((e) => {
+  console.error("\n✗ Deployment failed:", e.message);
+  process.exit(1);
+});

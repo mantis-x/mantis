@@ -1,0 +1,83 @@
+version: "3.9"
+
+services:
+  # ── Infrastructure ─────────────────────────────────────────────────────────
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-mantlescan}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-password}
+      POSTGRES_DB: ${POSTGRES_DB:-mantlescan}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-mantlescan}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  # ── Shared pipeline ────────────────────────────────────────────────────────
+  ingestion:
+    build: ./packages/ingestion
+    env_file: .env
+    depends_on:
+      postgres: { condition: service_healthy }
+      redis:    { condition: service_healthy }
+    restart: unless-stopped
+    command: python -m src.worker
+
+  detection:
+    build: ./packages/detection
+    env_file: .env
+    depends_on:
+      postgres: { condition: service_healthy }
+      redis:    { condition: service_healthy }
+    restart: unless-stopped
+    command: python -m src.detector
+
+  enrichment:
+    build: ./packages/enrichment
+    env_file: .env
+    depends_on:
+      postgres: { condition: service_healthy }
+      redis:    { condition: service_healthy }
+    restart: unless-stopped
+    command: python -m src.worker
+
+  # ── Track 2: MantleScan Alpha ─────────────────────────────────────────────
+  delivery:
+    build: ./packages/delivery
+    env_file: .env
+    depends_on:
+      postgres: { condition: service_healthy }
+      redis:    { condition: service_healthy }
+    restart: unless-stopped
+    command: python -m src.worker
+
+  # ── Track 6: AlphaExecutor ────────────────────────────────────────────────
+  executor:
+    build: ./packages/executor
+    env_file: .env
+    depends_on:
+      postgres: { condition: service_healthy }
+      redis:    { condition: service_healthy }
+    restart: unless-stopped
+    command: python -m src.worker
+
+volumes:
+  postgres_data:
+  redis_data:

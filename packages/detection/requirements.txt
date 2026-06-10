@@ -1,0 +1,4 @@
+numpy==1.26.4
+networkx==3.3
+python-dotenv==1.0.1
+-e ../shared
