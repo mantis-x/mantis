@@ -3,10 +3,10 @@ pragma solidity ^0.8.20;
 
 /**
  * @title  SignalAuditLog
- * @author MantleScan Alpha — Mantle Turing Test Hackathon 2026, Track 2
+ * @author Mantis Scout — Mantle Turing Test Hackathon 2026, Track 2
  *
  * @notice Immutable on-chain audit trail for every signal published by
- *         MantleScan Alpha. Provides cryptographic proof that a signal
+ *         Mantis Scout. Provides cryptographic proof that a signal
  *         existed at a specific time and has not been altered since.
  *
  * @dev    Architecture

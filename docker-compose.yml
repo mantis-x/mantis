@@ -5,15 +5,15 @@ services:
   postgres:
     image: postgres:16-alpine
     environment:
-      POSTGRES_USER: ${POSTGRES_USER:-mantlescan}
+      POSTGRES_USER: ${POSTGRES_USER:-mantis}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-password}
-      POSTGRES_DB: ${POSTGRES_DB:-mantlescan}
+      POSTGRES_DB: ${POSTGRES_DB:-mantis}
     ports:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-mantlescan}"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-mantis}"]
       interval: 5s
       timeout: 5s
       retries: 5
@@ -58,7 +58,7 @@ services:
     restart: unless-stopped
     command: python -m src.worker
 
-  # ── Track 2: MantleScan Alpha ─────────────────────────────────────────────
+  # ── Track 2: Mantis Scout ─────────────────────────────────────────────
   delivery:
     build: ./packages/delivery
     env_file: .env
@@ -68,7 +68,7 @@ services:
     restart: unless-stopped
     command: python -m src.worker
 
-  # ── Track 6: AlphaExecutor ────────────────────────────────────────────────
+  # ── Track 6: Mantis Execute ────────────────────────────────────────────────
   executor:
     build: ./packages/executor
     env_file: .env

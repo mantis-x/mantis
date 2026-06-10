@@ -20,7 +20,7 @@
 Three windows, pre-arranged:
 1. Telegram (show signal card received by bot)
 2. Mantle explorer (audit log contract events)
-3. AlphaExecutor agent identity page (decision history)
+3. Mantis Execute agent identity page (decision history)
 
 ## Demo script (90 seconds, live)
 
@@ -28,7 +28,7 @@ Three windows, pre-arranged:
 2. Read the confidence score and key factors aloud
 3. Switch to Mantle explorer → find the matching audit tx hash
 4. Say: "Every signal is hashed and recorded here — immutable, verifiable"
-5. Switch to AlphaExecutor identity page
+5. Switch to Mantis Execute identity page
 6. Show the agent's decision log — matching signal_id, execution tx hash
 7. Say: "One signal. Zero clicks. Full loop — intelligence to execution, on Mantle."
 

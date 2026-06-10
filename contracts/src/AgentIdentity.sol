@@ -3,9 +3,9 @@ pragma solidity ^0.8.20;
 
 /**
  * @title  AgentIdentity
- * @notice ERC-8004 inspired on-chain identity for AlphaExecutor agents.
+ * @notice ERC-8004 inspired on-chain identity for Mantis Execute agents.
  *
- * Each agent registered in AlphaExecutor mints one identity token.
+ * Each agent registered in Mantis Execute mints one identity token.
  * Every execution decision (success or abort) is logged here, forming
  * an auditable reputation record that grows over the agent's lifetime.
  *
@@ -76,7 +76,7 @@ contract AgentIdentity {
     /**
      * @notice Log a decision made by an agent.
      * @param agentId    The agent's identity token ID
-     * @param signalId   The MantleScan Alpha signal that triggered this
+     * @param signalId   The Mantis Scout signal that triggered this
      * @param actionType "swap" | "add_liquidity" | "abort"
      * @param success    True if execution completed, false if aborted
      * @param detail     tx hash on success, abort reason on failure

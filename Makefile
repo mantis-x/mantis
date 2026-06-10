@@ -2,7 +2,7 @@
 
 help:
 	@echo ""
-	@echo "  MantleScan Alpha + AlphaExecutor"
+	@echo "  Mantis — Scout + Execute"
 	@echo "  ─────────────────────────────────"
 	@echo "  make up        Start postgres + redis"
 	@echo "  make migrate   Run DB migrations"
@@ -10,7 +10,7 @@ help:
 	@echo "  make detect    Start detection worker"
 	@echo "  make enrich    Start enrichment worker"
 	@echo "  make deliver   Start Telegram delivery (Track 2)"
-	@echo "  make execute   Start AlphaExecutor (Track 6)"
+	@echo "  make execute   Start Mantis Execute agent (Track 6)"
 	@echo "  make all       Start full pipeline (all workers)"
 	@echo "  make test      Run all test suites"
 	@echo "  make lint      Run ruff linter across all packages"
