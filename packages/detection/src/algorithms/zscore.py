@@ -1,76 +1,105 @@
 """
-ZScoreDetector: computes z-scores for inflow volume against a 14-day rolling
-baseline per (pool_address, event_type) and flags anomalous events.
+ZScoreDetector — scores incoming NormalisedEvents against the
+14-day rolling baseline and flags anomalies above the threshold.
 
 Z-score = (observed_volume - baseline_mean) / baseline_std
 
-Events above ZSCORE_THRESHOLD (default 2.5) are flagged as candidates.
-If std == 0 (constant pool activity), the event is not flagged.
+Events above ZSCORE_THRESHOLD are returned as ScoredEvent instances.
 """
 from __future__ import annotations
+
 import logging
 import os
-from dataclasses import dataclass
 from typing import Optional
+
+from src.baselines.pool_baseline import BaselineStore
+from src.models.candidate import ScoredEvent
 
 log = logging.getLogger(__name__)
 
 ZSCORE_THRESHOLD = float(os.getenv("ZSCORE_THRESHOLD", "2.5"))
 
 
-@dataclass
-class ScoredEvent:
-    event_id:     int
-    pool_address: str
-    event_type:   str
-    wallet:       str
-    amount_usd:   float
-    z_score:      float
-    baseline_mean: float
-    baseline_std:  float
-
-
 class ZScoreDetector:
-    def __init__(self, baseline_store):
+    """
+    Stateless scorer — all state lives in BaselineStore.
+    Call score_event() for each incoming event.
+    """
+
+    def __init__(self, baseline_store: BaselineStore):
+        self._store     = baseline_store
+        self._threshold = ZSCORE_THRESHOLD
+        self._scored    = 0
+        self._flagged   = 0
+
+    def score_event(self, event) -> Optional[ScoredEvent]:
         """
-        baseline_store: object with method
-          get(pool_address, event_type) -> (mean, std) or None
+        Score one event. Returns ScoredEvent if anomalous, else None.
+        Also records the event into the baseline regardless of score.
         """
-        self._store = baseline_store
+        ts = event.timestamp.timestamp()
 
-    def score(self, event) -> Optional[ScoredEvent]:
-        """Score one event. Returns ScoredEvent if above threshold, else None."""
-        baseline = self._store.get(event.pool_address, event.event_type)
-        if baseline is None:
-            return None  # no baseline yet for this pool
-
-        mean, std = baseline
-        if std == 0:
-            return None  # no variance — skip
-
-        z = (event.amount_usd - mean) / std
-        if z < ZSCORE_THRESHOLD:
-            return None
-
-        log.info(
-            "Anomaly: pool=%s type=%s z=%.2f amount=$%.0f",
-            event.pool_address[:10], event.event_type, z, event.amount_usd,
+        # Always update baseline
+        self._store.record(
+            event.pool_address,
+            event.event_type.value if hasattr(event.event_type, 'value') else event.event_type,
+            event.amount_usd,
+            ts,
         )
+        self._scored += 1
+
+        # Score against baseline
+        z = self._store.z_score(
+            event.pool_address,
+            event.event_type.value if hasattr(event.event_type, 'value') else event.event_type,
+            event.amount_usd,
+        )
+
+        if z is None:
+            return None   # not enough baseline data yet
+
+        if z < self._threshold:
+            return None   # normal activity
+
+        stats = self._store.stats(
+            event.pool_address,
+            event.event_type.value if hasattr(event.event_type, 'value') else event.event_type,
+        )
+
+        self._flagged += 1
+        log.info(
+            "⚡ Anomaly z=%.2f pool=%s type=%s usd=%.0f",
+            z, event.pool_address[:12], event.event_type, event.amount_usd,
+        )
+
         return ScoredEvent(
-            event_id=event.id,
-            pool_address=event.pool_address,
-            event_type=event.event_type,
-            wallet=event.wallet_address,
-            amount_usd=event.amount_usd,
-            z_score=round(z, 3),
-            baseline_mean=round(mean, 2),
-            baseline_std=round(std, 2),
+            block_number   = event.block_number,
+            tx_hash        = event.tx_hash,
+            protocol       = event.protocol.value if hasattr(event.protocol, 'value') else event.protocol,
+            pool_address   = event.pool_address,
+            wallet_address = event.wallet_address,
+            event_type     = event.event_type.value if hasattr(event.event_type, 'value') else event.event_type,
+            amount_usd     = event.amount_usd,
+            timestamp      = event.timestamp,
+            z_score        = round(z, 3),
+            baseline_mean  = round(stats.mean, 2) if stats else 0.0,
+            baseline_std   = round(stats.std, 2)  if stats else 0.0,
         )
 
     def score_batch(self, events: list) -> list[ScoredEvent]:
+        """Score a batch of events. Returns only the flagged ones."""
         results = []
         for e in events:
-            scored = self.score(e)
+            scored = self.score_event(e)
             if scored:
                 results.append(scored)
         return results
+
+    @property
+    def stats(self) -> dict:
+        return {
+            "scored":   self._scored,
+            "flagged":  self._flagged,
+            "flag_rate": round(self._flagged / max(self._scored, 1) * 100, 2),
+            "threshold": self._threshold,
+        }
