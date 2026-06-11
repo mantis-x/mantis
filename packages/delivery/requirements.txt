@@ -1,0 +1,4 @@
+python-telegram-bot==21.3
+python-dotenv==1.0.1
+redis==5.0.4
+web3==6.15.1
