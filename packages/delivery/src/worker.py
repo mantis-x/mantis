@@ -37,6 +37,7 @@ from telegram.error import TelegramError
 from src.telegram.commands import register_handlers
 from src.telegram.subscription_manager import SubscriptionManager
 from src.formatters.signal_card import format_signal_card
+from src.audit.on_chain_logger import OnChainLogger
 
 # Shared state
 sub_manager = SubscriptionManager()
@@ -56,6 +57,17 @@ async def dispatch_signals(bot: Bot, redis_url: str) -> None:
     """
     import redis.asyncio as aioredis
     r = aioredis.from_url(redis_url, decode_responses=True)
+
+    # Initialise on-chain audit logger
+    try:
+        audit_logger = OnChainLogger()
+        log.info(
+            "Audit logger ready — contract=%s",
+            os.getenv("AUDIT_CONTRACT_ADDRESS", "")[:12],
+        )
+    except Exception as exc:
+        log.warning("Audit logger unavailable: %s — signals will dispatch without on-chain logging", exc)
+        audit_logger = None
 
     log.info("Signal dispatcher ready — listening on mantis:signals")
 
@@ -102,6 +114,28 @@ async def dispatch_signals(bot: Bot, redis_url: str) -> None:
                     log.warning("Failed to send to chat_id=%d: %s", chat_id, exc)
 
             log.info("Signal dispatched to %d/%d subscribers", sent, len(recipients))
+
+            # Log signal hash on-chain after dispatch
+            if audit_logger and sent > 0:
+                try:
+                    result = audit_logger.log_signal(type("S", (), {
+                        "id":           signal.get("id") or 0,
+                        "confidence":   signal.get("confidence", 0),
+                        "deliver_at":   __import__("datetime").datetime.fromisoformat(
+                                            signal.get("deliver_at", __import__("datetime").datetime.utcnow().isoformat())
+                                        ),
+                        "cluster":      type("C", (), {
+                            "pool_address": signal.get("pool_address", ""),
+                            "protocol":     type("P", (), {"value": signal.get("protocol", "")})(),
+                        })(),
+                        "signal_type":  type("T", (), {"value": signal.get("signal_type", "")})(),
+                        "summary":      signal.get("summary", ""),
+                    })())
+                    if result:
+                        log.info("🔐 Signal logged on-chain: tx=%s", result.tx_hash[:14])
+                        stats["audit_tx_hash"] = result.tx_hash
+                except Exception as exc:
+                    log.warning("On-chain audit failed: %s", exc)
 
         except Exception as exc:
             log.warning("Dispatch error: %s", exc)
