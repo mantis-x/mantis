@@ -72,7 +72,6 @@ class ByrealCLIRunner:
         return self._run(
             ["pools", "list",
              "--sort-field", sort_field,
-             "--limit", str(limit),
              "-o", "json"]
         )
 
