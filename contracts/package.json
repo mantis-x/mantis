@@ -1,0 +1,18 @@
+{
+  "name": "mantis-contracts",
+  "version": "1.0.0",
+  "description": "Mantis Scout smart contracts",
+  "scripts": {
+    "compile": "hardhat compile",
+    "test": "hardhat test",
+    "deploy:audit": "hardhat run scripts/deploy_audit_log.js --network mantleSepolia",
+    "deploy:identity": "hardhat run scripts/deploy_agent_identity.js --network mantleSepolia"
+  },
+  "devDependencies": {
+    "@nomicfoundation/hardhat-toolbox": "^5.0.0",
+    "hardhat": "^2.22.0"
+  },
+  "dependencies": {
+    "dotenv": "^16.4.0"
+  }
+}

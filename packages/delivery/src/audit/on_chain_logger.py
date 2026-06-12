@@ -32,8 +32,11 @@ from typing import Optional
 
 from eth_account import Account
 from web3 import Web3
-from web3.middleware import ExtraDataToPOAMiddleware
-
+try:
+    from web3.middleware import ExtraDataToPOAMiddleware
+except ImportError:
+    from web3.middleware import geth_poa_middleware as ExtraDataToPOAMiddleware
+    
 log = logging.getLogger(__name__)
 
 # ── ABI fragment (only the functions we call) ────────────────────────────────
