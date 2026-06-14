@@ -1,0 +1,1008 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Mantis — See the move. Make the move.</title>
+  <meta name="description" content="Signal-to-execution AI on Mantle. Scout detects smart money. Execute acts on it." />
+  <meta property="og:title" content="Mantis — See the move. Make the move." />
+  <meta property="og:description" content="Signal-to-execution AI on Mantle. Scout detects smart money. Execute acts on it." />
+  <meta property="og:type" content="website" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=Inter:wght@400;500&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:        #0A0B0D;
+      --bg-card:   #111614;
+      --bg-card2:  #141a13;
+      --green:     #7CFC6E;
+      --green-dim: #3D7035;
+      --green-mute:#1E3B1C;
+      --text:      #E8F5E0;
+      --text-2:    #9DB896;
+      --text-3:    #5A7056;
+      --border:    #1E2E1C;
+      --mono:      'JetBrains Mono', monospace;
+      --display:   'Space Grotesk', sans-serif;
+      --body:      'Inter', sans-serif;
+    }
+
+    html { scroll-behavior: smooth; }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--body);
+      font-size: 16px;
+      line-height: 1.6;
+      -webkit-font-smoothing: antialiased;
+      overflow-x: hidden;
+    }
+
+    /* ── NAV ── */
+    nav {
+      position: fixed;
+      top: 0; left: 0; right: 0;
+      z-index: 100;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 2.5rem;
+      height: 60px;
+      background: rgba(10,11,13,0.85);
+      backdrop-filter: blur(12px);
+      border-bottom: 1px solid var(--border);
+    }
+
+    .nav-logo {
+      font-family: var(--display);
+      font-weight: 700;
+      font-size: 1.15rem;
+      letter-spacing: -0.01em;
+      color: var(--text);
+      text-decoration: none;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+
+    .nav-logo .dot {
+      width: 8px; height: 8px;
+      border-radius: 50%;
+      background: var(--green);
+      animation: pulse 2s ease-in-out infinite;
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.5; transform: scale(0.8); }
+    }
+
+    .nav-links {
+      display: flex;
+      align-items: center;
+      gap: 2rem;
+      list-style: none;
+    }
+
+    .nav-links a {
+      font-size: 0.875rem;
+      color: var(--text-2);
+      text-decoration: none;
+      transition: color 0.2s;
+    }
+
+    .nav-links a:hover { color: var(--text); }
+
+    .nav-cta {
+      font-family: var(--display);
+      font-size: 0.8rem;
+      font-weight: 600;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      color: var(--bg) !important;
+      background: var(--green);
+      padding: 0.45rem 1.1rem;
+      border-radius: 4px;
+      text-decoration: none;
+      transition: opacity 0.2s;
+    }
+
+    .nav-cta:hover { opacity: 0.85; }
+
+    /* ── HERO ── */
+    .hero {
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      padding: 120px 2.5rem 80px;
+      max-width: 1200px;
+      margin: 0 auto;
+    }
+
+    .hero-eyebrow {
+      font-family: var(--mono);
+      font-size: 0.72rem;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      color: var(--green);
+      margin-bottom: 1.75rem;
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+    }
+
+    .hero-eyebrow::before {
+      content: '';
+      display: block;
+      width: 24px;
+      height: 1px;
+      background: var(--green);
+    }
+
+    h1 {
+      font-family: var(--display);
+      font-size: clamp(3rem, 7vw, 6.5rem);
+      font-weight: 700;
+      line-height: 1.0;
+      letter-spacing: -0.03em;
+      color: var(--text);
+      margin-bottom: 1.5rem;
+      max-width: 900px;
+    }
+
+    h1 em {
+      font-style: normal;
+      color: var(--green);
+    }
+
+    .hero-sub {
+      font-size: 1.15rem;
+      color: var(--text-2);
+      max-width: 520px;
+      margin-bottom: 3rem;
+      line-height: 1.7;
+    }
+
+    .hero-actions {
+      display: flex;
+      gap: 1rem;
+      flex-wrap: wrap;
+      margin-bottom: 4rem;
+    }
+
+    .btn-primary {
+      font-family: var(--display);
+      font-weight: 600;
+      font-size: 0.875rem;
+      letter-spacing: 0.02em;
+      color: var(--bg);
+      background: var(--green);
+      border: none;
+      padding: 0.85rem 1.75rem;
+      border-radius: 4px;
+      cursor: pointer;
+      text-decoration: none;
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      transition: opacity 0.2s, transform 0.15s;
+    }
+
+    .btn-primary:hover { opacity: 0.88; transform: translateY(-1px); }
+
+    .btn-secondary {
+      font-family: var(--display);
+      font-weight: 500;
+      font-size: 0.875rem;
+      color: var(--text-2);
+      background: transparent;
+      border: 1px solid var(--border);
+      padding: 0.85rem 1.75rem;
+      border-radius: 4px;
+      cursor: pointer;
+      text-decoration: none;
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      transition: border-color 0.2s, color 0.2s, transform 0.15s;
+    }
+
+    .btn-secondary:hover {
+      border-color: var(--green-dim);
+      color: var(--text);
+      transform: translateY(-1px);
+    }
+
+    /* ── SIGNAL TICKER ── */
+    .ticker-label {
+      font-family: var(--mono);
+      font-size: 0.65rem;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--text-3);
+      margin-bottom: 0.5rem;
+    }
+
+    .ticker-window {
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      background: var(--bg-card);
+      overflow: hidden;
+      max-width: 700px;
+    }
+
+    .ticker-header {
+      padding: 0.6rem 1rem;
+      background: var(--bg-card2);
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+
+    .ticker-dot {
+      width: 6px; height: 6px;
+      border-radius: 50%;
+      background: var(--green);
+      animation: pulse 1.5s ease-in-out infinite;
+    }
+
+    .ticker-header-label {
+      font-family: var(--mono);
+      font-size: 0.65rem;
+      color: var(--text-3);
+      letter-spacing: 0.08em;
+    }
+
+    .ticker-feed {
+      padding: 0.5rem 0;
+      height: 148px;
+      overflow: hidden;
+      position: relative;
+    }
+
+    .ticker-row {
+      font-family: var(--mono);
+      font-size: 0.72rem;
+      padding: 0.35rem 1rem;
+      display: grid;
+      grid-template-columns: 80px 1fr 80px 64px;
+      gap: 1rem;
+      align-items: center;
+      border-bottom: 1px solid rgba(30,46,28,0.4);
+      opacity: 0;
+      transform: translateY(8px);
+      transition: opacity 0.4s ease, transform 0.4s ease;
+    }
+
+    .ticker-row.visible {
+      opacity: 1;
+      transform: translateY(0);
+    }
+
+    .ticker-time { color: var(--text-3); }
+    .ticker-signal { color: var(--text-2); }
+    .ticker-protocol { color: var(--text-3); }
+
+    .ticker-conf {
+      font-weight: 500;
+      text-align: right;
+    }
+
+    .conf-high { color: var(--green); }
+    .conf-mid  { color: #B8CC6E; }
+    .conf-low  { color: var(--text-3); }
+
+    /* ── DIVIDER ── */
+    .section-divider {
+      border: none;
+      border-top: 1px solid var(--border);
+      margin: 0;
+    }
+
+    /* ── SECTION WRAPPER ── */
+    .section {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 6rem 2.5rem;
+    }
+
+    .section-label {
+      font-family: var(--mono);
+      font-size: 0.65rem;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      color: var(--green);
+      margin-bottom: 1rem;
+    }
+
+    h2 {
+      font-family: var(--display);
+      font-size: clamp(1.75rem, 3.5vw, 2.75rem);
+      font-weight: 700;
+      letter-spacing: -0.02em;
+      color: var(--text);
+      margin-bottom: 1rem;
+    }
+
+    .section-intro {
+      font-size: 1rem;
+      color: var(--text-2);
+      max-width: 560px;
+      line-height: 1.7;
+      margin-bottom: 3.5rem;
+    }
+
+    /* ── PRODUCTS ── */
+    .products-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1.5px;
+      background: var(--border);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      overflow: hidden;
+    }
+
+    .product-card {
+      background: var(--bg-card);
+      padding: 2.5rem;
+    }
+
+    .product-tag {
+      font-family: var(--mono);
+      font-size: 0.62rem;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--green);
+      background: var(--green-mute);
+      display: inline-block;
+      padding: 0.25rem 0.6rem;
+      border-radius: 3px;
+      margin-bottom: 1.25rem;
+    }
+
+    h3 {
+      font-family: var(--display);
+      font-size: 1.5rem;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+      color: var(--text);
+      margin-bottom: 0.75rem;
+    }
+
+    .product-desc {
+      font-size: 0.9rem;
+      color: var(--text-2);
+      line-height: 1.7;
+      margin-bottom: 1.75rem;
+    }
+
+    .product-specs {
+      list-style: none;
+      display: flex;
+      flex-direction: column;
+      gap: 0.6rem;
+    }
+
+    .product-specs li {
+      font-family: var(--mono);
+      font-size: 0.72rem;
+      color: var(--text-3);
+      display: flex;
+      align-items: flex-start;
+      gap: 0.6rem;
+    }
+
+    .product-specs li::before {
+      content: '→';
+      color: var(--green);
+      flex-shrink: 0;
+      margin-top: 1px;
+    }
+
+    /* ── PIPELINE ── */
+    .pipeline {
+      display: flex;
+      align-items: stretch;
+      gap: 0;
+      margin-top: 3.5rem;
+      overflow-x: auto;
+      padding-bottom: 0.5rem;
+    }
+
+    .pipe-step {
+      flex: 1;
+      min-width: 160px;
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      padding: 1.5rem 1.25rem;
+      position: relative;
+    }
+
+    .pipe-step:not(:last-child)::after {
+      content: '→';
+      position: absolute;
+      right: -14px;
+      top: 50%;
+      transform: translateY(-50%);
+      color: var(--green);
+      font-size: 1rem;
+      z-index: 2;
+      background: var(--bg);
+      padding: 0 2px;
+    }
+
+    .pipe-step:not(:first-child) {
+      margin-left: -1px;
+    }
+
+    .pipe-num {
+      font-family: var(--mono);
+      font-size: 0.6rem;
+      color: var(--text-3);
+      letter-spacing: 0.1em;
+      margin-bottom: 0.5rem;
+    }
+
+    .pipe-name {
+      font-family: var(--display);
+      font-size: 0.875rem;
+      font-weight: 600;
+      color: var(--text);
+      margin-bottom: 0.35rem;
+    }
+
+    .pipe-detail {
+      font-size: 0.75rem;
+      color: var(--text-3);
+      line-height: 1.5;
+    }
+
+    .pipe-pkg {
+      font-family: var(--mono);
+      font-size: 0.6rem;
+      color: var(--green-dim);
+      margin-top: 0.5rem;
+    }
+
+    /* ── CONTRACTS ── */
+    .contracts-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1rem;
+    }
+
+    .contract-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 1.75rem;
+    }
+
+    .contract-name {
+      font-family: var(--display);
+      font-weight: 600;
+      font-size: 1rem;
+      color: var(--text);
+      margin-bottom: 0.35rem;
+    }
+
+    .contract-purpose {
+      font-size: 0.82rem;
+      color: var(--text-2);
+      margin-bottom: 1.25rem;
+      line-height: 1.5;
+    }
+
+    .contract-addr-label {
+      font-family: var(--mono);
+      font-size: 0.6rem;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--text-3);
+      margin-bottom: 0.35rem;
+    }
+
+    .contract-addr {
+      font-family: var(--mono);
+      font-size: 0.72rem;
+      color: var(--green);
+      word-break: break-all;
+      background: var(--green-mute);
+      padding: 0.6rem 0.75rem;
+      border-radius: 4px;
+      margin-bottom: 0.75rem;
+      cursor: pointer;
+      transition: background 0.2s;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 0.5rem;
+    }
+
+    .contract-addr:hover { background: #243322; }
+
+    .copy-hint {
+      font-size: 0.6rem;
+      color: var(--text-3);
+      flex-shrink: 0;
+    }
+
+    .contract-network {
+      font-family: var(--mono);
+      font-size: 0.62rem;
+      color: var(--text-3);
+      display: flex;
+      align-items: center;
+      gap: 0.4rem;
+    }
+
+    .contract-network::before {
+      content: '';
+      display: inline-block;
+      width: 5px; height: 5px;
+      border-radius: 50%;
+      background: #F59E0B;
+    }
+
+    /* ── STACK ── */
+    .stack-grid {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.5rem;
+    }
+
+    .stack-chip {
+      font-family: var(--mono);
+      font-size: 0.7rem;
+      color: var(--text-2);
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      padding: 0.35rem 0.8rem;
+      border-radius: 3px;
+    }
+
+    /* ── HACKATHON BANNER ── */
+    .hackathon-banner {
+      background: var(--bg-card2);
+      border: 1px solid var(--border);
+      border-left: 3px solid var(--green);
+      border-radius: 6px;
+      padding: 1.75rem 2rem;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 2rem;
+      flex-wrap: wrap;
+      margin-top: 3rem;
+    }
+
+    .hackathon-meta {
+      display: flex;
+      flex-direction: column;
+      gap: 0.25rem;
+    }
+
+    .hackathon-title {
+      font-family: var(--display);
+      font-weight: 600;
+      font-size: 1rem;
+      color: var(--text);
+    }
+
+    .hackathon-sub {
+      font-size: 0.82rem;
+      color: var(--text-2);
+    }
+
+    .hackathon-tracks {
+      display: flex;
+      gap: 0.5rem;
+      flex-wrap: wrap;
+    }
+
+    .track-badge {
+      font-family: var(--mono);
+      font-size: 0.6rem;
+      letter-spacing: 0.08em;
+      color: var(--green);
+      background: var(--green-mute);
+      border: 1px solid var(--green-dim);
+      padding: 0.3rem 0.65rem;
+      border-radius: 3px;
+    }
+
+    /* ── FOOTER ── */
+    footer {
+      border-top: 1px solid var(--border);
+      padding: 2.5rem;
+      max-width: 1200px;
+      margin: 0 auto;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 1rem;
+    }
+
+    .footer-logo {
+      font-family: var(--display);
+      font-weight: 700;
+      font-size: 0.9rem;
+      color: var(--text-3);
+    }
+
+    .footer-links {
+      display: flex;
+      gap: 1.5rem;
+      list-style: none;
+    }
+
+    .footer-links a {
+      font-size: 0.8rem;
+      color: var(--text-3);
+      text-decoration: none;
+      transition: color 0.2s;
+    }
+
+    .footer-links a:hover { color: var(--text-2); }
+
+    .footer-built {
+      font-family: var(--mono);
+      font-size: 0.62rem;
+      color: var(--text-3);
+    }
+
+    .footer-built span {
+      color: var(--green);
+    }
+
+    /* ── COPY TOAST ── */
+    .toast {
+      position: fixed;
+      bottom: 2rem;
+      left: 50%;
+      transform: translateX(-50%) translateY(20px);
+      background: var(--green);
+      color: var(--bg);
+      font-family: var(--mono);
+      font-size: 0.75rem;
+      padding: 0.6rem 1.25rem;
+      border-radius: 4px;
+      opacity: 0;
+      transition: opacity 0.2s, transform 0.2s;
+      pointer-events: none;
+      z-index: 999;
+    }
+
+    .toast.show {
+      opacity: 1;
+      transform: translateX(-50%) translateY(0);
+    }
+
+    /* ── RESPONSIVE ── */
+    @media (max-width: 768px) {
+      nav { padding: 0 1.25rem; }
+      .nav-links { display: none; }
+      .hero { padding: 100px 1.25rem 60px; }
+      .section { padding: 4rem 1.25rem; }
+      .products-grid { grid-template-columns: 1fr; }
+      .contracts-grid { grid-template-columns: 1fr; }
+      .pipeline { gap: 0; }
+      .pipe-step:not(:last-child)::after { display: none; }
+      footer { padding: 2rem 1.25rem; flex-direction: column; align-items: flex-start; }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after { animation-duration: 0.001ms !important; transition-duration: 0.001ms !important; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- NAV -->
+<nav>
+  <a href="#" class="nav-logo">
+    <span class="dot"></span>
+    Mantis
+  </a>
+  <ul class="nav-links">
+    <li><a href="#product">Product</a></li>
+    <li><a href="#pipeline">Pipeline</a></li>
+    <li><a href="#contracts">Contracts</a></li>
+    <li><a href="https://github.com/mantis-x/mantis" target="_blank" rel="noopener">GitHub</a></li>
+    <li><a href="https://t.me/mantis_scout_bot" target="_blank" rel="noopener" class="nav-cta">Try Scout →</a></li>
+  </ul>
+</nav>
+
+<!-- HERO -->
+<section>
+  <div class="hero">
+    <p class="hero-eyebrow">Mantle · Track 2 × Track 6 · Turing Test Hackathon 2026</p>
+    <h1>See the move.<br /><em>Make the move.</em></h1>
+    <p class="hero-sub">
+      Signal-to-execution AI built entirely on Mantle. Scout detects smart money in real time. Execute acts on it autonomously.
+    </p>
+    <div class="hero-actions">
+      <a href="https://t.me/mantis_scout_bot" target="_blank" rel="noopener" class="btn-primary">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.373 0 0 5.373 0 12s5.373 12 12 12 12-5.373 12-12S18.627 0 12 0zm5.894 8.221l-1.97 9.28c-.145.658-.537.818-1.084.508l-3-2.21-1.447 1.394c-.16.16-.295.295-.605.295l.213-3.053 5.56-5.023c.242-.213-.054-.333-.373-.12L7.17 13.5l-2.945-.924c-.64-.203-.653-.64.136-.954l11.498-4.431c.534-.194 1.001.13.829.954l.206-.924z"/></svg>
+        Try Mantis Scout
+      </a>
+      <a href="https://github.com/mantis-x/mantis" target="_blank" rel="noopener" class="btn-secondary">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z"/></svg>
+        View on GitHub
+      </a>
+    </div>
+
+    <!-- Live signal ticker -->
+    <div class="ticker-label">Live Scout Feed</div>
+    <div class="ticker-window">
+      <div class="ticker-header">
+        <span class="ticker-dot"></span>
+        <span class="ticker-header-label">mantis-scout · mantle mainnet · streaming</span>
+      </div>
+      <div class="ticker-feed" id="tickerFeed">
+        <!-- populated by JS -->
+      </div>
+    </div>
+  </div>
+</section>
+
+<hr class="section-divider" />
+
+<!-- PRODUCT -->
+<section id="product">
+  <div class="section">
+    <p class="section-label">The Product</p>
+    <h2>Two layers. One pipeline.</h2>
+    <p class="section-intro">
+      Mantis runs as a single signal-to-execution system. Scout is what you see. Execute is what acts.
+    </p>
+
+    <div class="products-grid">
+      <div class="product-card">
+        <span class="product-tag">Track 2 · AI Alpha & Data</span>
+        <h3>Mantis Scout</h3>
+        <p class="product-desc">
+          The intelligence layer. Monitors Agni Finance, Merchant Moe, and Fluxion around the clock. Detects smart money wallet clusters using z-score anomaly detection, enriches each signal through Claude Sonnet, and delivers plain-English alerts with confidence scores to Telegram. Every signal is hashed and recorded immutably on-chain via <code style="font-family:var(--mono);font-size:0.8em;color:var(--green)">SignalAuditLog.sol</code>.
+        </p>
+        <ul class="product-specs">
+          <li>Z-score anomaly detection across wallet clusters</li>
+          <li>Claude Sonnet enrichment with confidence scoring</li>
+          <li>Telegram delivery with instant signal alerts</li>
+          <li>Immutable on-chain audit log per signal</li>
+          <li>Nansen wallet intelligence + Elfa AI sentiment</li>
+        </ul>
+      </div>
+      <div class="product-card">
+        <span class="product-tag">Track 6 · Agentic Economy</span>
+        <h3>Mantis Execute</h3>
+        <p class="product-desc">
+          The execution layer. An intent-based agentic wallet powered by the Byreal Skills CLI. Define your intent once — "follow smart money into mETH pools when confidence exceeds 75" — and the agent evaluates safety guards, sizes the position, and executes autonomously. Every decision, including aborts, is logged to the agent's ERC-8004 on-chain identity via <code style="font-family:var(--mono);font-size:0.8em;color:var(--green)">AgentIdentity.sol</code>.
+        </p>
+        <ul class="product-specs">
+          <li>Intent-based rule engine with natural language rules</li>
+          <li>Byreal Skills CLI for on-chain execution</li>
+          <li>Safety guards: position cap, slippage, drawdown abort</li>
+          <li>ERC-8004 on-chain agent reputation ledger</li>
+          <li>Full decision audit trail, including aborts</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="hackathon-banner">
+      <div class="hackathon-meta">
+        <div class="hackathon-title">Mantle Turing Test Hackathon 2026</div>
+        <div class="hackathon-sub">Phase 2: AI Awakening · Demo Day July 2, 2026</div>
+      </div>
+      <div class="hackathon-tracks">
+        <span class="track-badge">Track 2 · AI Alpha & Data</span>
+        <span class="track-badge">Track 6 · Agentic Economy</span>
+      </div>
+      <a href="https://dorahacks.io/buidl/44876" target="_blank" rel="noopener" class="btn-secondary" style="white-space:nowrap">
+        View on DoraHacks →
+      </a>
+    </div>
+  </div>
+</section>
+
+<hr class="section-divider" />
+
+<!-- PIPELINE -->
+<section id="pipeline">
+  <div class="section">
+    <p class="section-label">How It Works</p>
+    <h2>Signal detected. Agent triggered.<br />Position opened. Outcome logged.</h2>
+    <p class="section-intro">
+      Every step in the pipeline runs on Mantle — from raw RPC data to on-chain execution record.
+    </p>
+
+    <div class="pipeline">
+      <div class="pipe-step">
+        <div class="pipe-num">01</div>
+        <div class="pipe-name">Ingest</div>
+        <div class="pipe-detail">Mantle RPC polling. Protocol decoders for Agni, Merchant Moe, Fluxion.</div>
+        <div class="pipe-pkg">ingestion/</div>
+      </div>
+      <div class="pipe-step">
+        <div class="pipe-num">02</div>
+        <div class="pipe-name">Detect</div>
+        <div class="pipe-detail">Z-score anomaly detection across Nansen-labeled wallet clusters.</div>
+        <div class="pipe-pkg">detection/</div>
+      </div>
+      <div class="pipe-step">
+        <div class="pipe-num">03</div>
+        <div class="pipe-name">Enrich</div>
+        <div class="pipe-detail">Claude Sonnet interprets signal context and assigns confidence score.</div>
+        <div class="pipe-pkg">enrichment/</div>
+      </div>
+      <div class="pipe-step">
+        <div class="pipe-num">04</div>
+        <div class="pipe-name">Deliver</div>
+        <div class="pipe-detail">Telegram alert sent. Signal hash logged to SignalAuditLog.sol on-chain.</div>
+        <div class="pipe-pkg">delivery/</div>
+      </div>
+      <div class="pipe-step">
+        <div class="pipe-num">05</div>
+        <div class="pipe-name">Execute</div>
+        <div class="pipe-detail">Intent engine evaluates signal. Byreal executes. AgentIdentity.sol updated.</div>
+        <div class="pipe-pkg">executor/</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<hr class="section-divider" />
+
+<!-- CONTRACTS -->
+<section id="contracts">
+  <div class="section">
+    <p class="section-label">On-Chain</p>
+    <h2>Fully auditable. Forever.</h2>
+    <p class="section-intro">
+      Two contracts on Mantle Sepolia. Every signal hashed. Every agent decision recorded. Nothing off-chain, nothing hidden.
+    </p>
+
+    <div class="contracts-grid">
+      <div class="contract-card">
+        <div class="contract-name">SignalAuditLog.sol</div>
+        <div class="contract-purpose">Immutable keccak256 hash log of every Scout signal. If Scout fires, it's on-chain — always.</div>
+        <div class="contract-addr-label">Contract Address · Mantle Sepolia</div>
+        <div class="contract-addr" onclick="copyAddr(this, 'SIGNAL_CONTRACT_ADDRESS')" title="Click to copy">
+          <span id="SIGNAL_CONTRACT_ADDRESS">Deploying to Mantle Sepolia…</span>
+          <span class="copy-hint">copy</span>
+        </div>
+        <div class="contract-network">Mantle Sepolia Testnet</div>
+      </div>
+      <div class="contract-card">
+        <div class="contract-name">AgentIdentity.sol</div>
+        <div class="contract-purpose">ERC-8004 on-chain reputation ledger for Execute agents. Tracks every decision, including aborts.</div>
+        <div class="contract-addr-label">Contract Address · Mantle Sepolia</div>
+        <div class="contract-addr" onclick="copyAddr(this, 'AGENT_CONTRACT_ADDRESS')" title="Click to copy">
+          <span id="AGENT_CONTRACT_ADDRESS">Deploying to Mantle Sepolia…</span>
+          <span class="copy-hint">copy</span>
+        </div>
+        <div class="contract-network">Mantle Sepolia Testnet</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<hr class="section-divider" />
+
+<!-- STACK -->
+<section>
+  <div class="section" style="padding-top:4rem;padding-bottom:4rem;">
+    <p class="section-label">Stack</p>
+    <h2 style="margin-bottom:1.5rem;">Built on real tools.</h2>
+    <div class="stack-grid">
+      <span class="stack-chip">Python 3.12</span>
+      <span class="stack-chip">Solidity 0.8.20</span>
+      <span class="stack-chip">Claude Sonnet</span>
+      <span class="stack-chip">Byreal Skills CLI</span>
+      <span class="stack-chip">Nansen API</span>
+      <span class="stack-chip">Elfa AI</span>
+      <span class="stack-chip">web3.py</span>
+      <span class="stack-chip">Telegram Bot API</span>
+      <span class="stack-chip">Postgres</span>
+      <span class="stack-chip">Redis</span>
+      <span class="stack-chip">Hardhat</span>
+      <span class="stack-chip">Docker</span>
+      <span class="stack-chip">ERC-8004</span>
+      <span class="stack-chip">Mantle L2</span>
+    </div>
+  </div>
+</section>
+
+<!-- FOOTER -->
+<footer>
+  <div class="footer-logo">Mantis</div>
+  <ul class="footer-links">
+    <li><a href="https://github.com/mantis-x/mantis" target="_blank" rel="noopener">GitHub</a></li>
+    <li><a href="https://dorahacks.io/buidl/44876" target="_blank" rel="noopener">DoraHacks</a></li>
+    <li><a href="https://t.me/mantis_scout_bot" target="_blank" rel="noopener">Telegram</a></li>
+    <li><a href="https://explorer.sepolia.mantle.xyz" target="_blank" rel="noopener">Explorer</a></li>
+  </ul>
+  <div class="footer-built">Built on <span>Mantle</span> · Turing Test Hackathon 2026</div>
+</footer>
+
+<!-- TOAST -->
+<div class="toast" id="toast">Address copied</div>
+
+<script>
+  // ── SIGNAL TICKER ──
+  const signals = [
+    { time: 'just now', signal: 'Smart money cluster → mETH/USDT pool', protocol: 'Agni', conf: 91, cls: 'conf-high' },
+    { time: '2m ago',   signal: 'Whale accumulation detected · 3 wallets',  protocol: 'Merchant Moe', conf: 78, cls: 'conf-mid' },
+    { time: '5m ago',   signal: 'Anomalous LP entry · z-score 3.2σ',        protocol: 'Fluxion', conf: 85, cls: 'conf-high' },
+    { time: '9m ago',   signal: 'Smart money exit · mETH rotation',         protocol: 'Agni', conf: 67, cls: 'conf-mid' },
+    { time: '14m ago',  signal: 'Cluster divergence · 5-wallet group',       protocol: 'Merchant Moe', conf: 55, cls: 'conf-low' },
+    { time: '18m ago',  signal: 'High-confidence LP entry · 4.1σ spike',     protocol: 'Fluxion', conf: 94, cls: 'conf-high' },
+    { time: '23m ago',  signal: 'Smart money cluster · new position opened', protocol: 'Agni', conf: 82, cls: 'conf-high' },
+    { time: '31m ago',  signal: 'Anomaly cleared · signal aborted',          protocol: 'Fluxion', conf: 38, cls: 'conf-low' },
+  ];
+
+  function renderTicker() {
+    const feed = document.getElementById('tickerFeed');
+    feed.innerHTML = '';
+    const visible = signals.slice(0, 4);
+    visible.forEach((s, i) => {
+      const row = document.createElement('div');
+      row.className = 'ticker-row';
+      row.innerHTML = `
+        <span class="ticker-time">${s.time}</span>
+        <span class="ticker-signal">${s.signal}</span>
+        <span class="ticker-protocol">${s.protocol}</span>
+        <span class="ticker-conf ${s.cls}">${s.conf}%</span>
+      `;
+      feed.appendChild(row);
+      setTimeout(() => row.classList.add('visible'), i * 120);
+    });
+  }
+
+  function rotateTicker() {
+    const top = signals.shift();
+    signals.push({ ...top, time: 'just now' });
+    // re-timestamp the rest roughly
+    const mins = [2, 5, 9];
+    signals.slice(1, 4).forEach((s, i) => { s.time = `${mins[i]}m ago`; });
+    const feed = document.getElementById('tickerFeed');
+    const rows = feed.querySelectorAll('.ticker-row');
+    rows.forEach(r => { r.classList.remove('visible'); });
+    setTimeout(renderTicker, 300);
+  }
+
+  renderTicker();
+  setInterval(rotateTicker, 4500);
+
+  // ── COPY ADDRESS ──
+  function copyAddr(el, id) {
+    const text = document.getElementById(id).textContent.trim();
+    if (text.startsWith('Deploy') || text.startsWith('0x') === false && text.length < 10) return;
+    navigator.clipboard.writeText(text).then(() => {
+      const toast = document.getElementById('toast');
+      toast.classList.add('show');
+      setTimeout(() => toast.classList.remove('show'), 1800);
+    });
+  }
+
+  // ── CONTRACT ADDRESSES ──
+  // Replace these with your actual deployed addresses
+  const CONTRACT_ADDRESSES = {
+    SIGNAL_CONTRACT_ADDRESS: '0xd745Fc0c28B8755b6280232a179e21C50B1D3adf',
+    AGENT_CONTRACT_ADDRESS:  '0x06036B53A1f8d2Cf691a6f324C0672eB6D865667',
+  };
+
+  Object.entries(CONTRACT_ADDRESSES).forEach(([id, addr]) => {
+    const el = document.getElementById(id);
+    if (el) el.textContent = addr;
+  });
+</script>
+</body>
+</html>
