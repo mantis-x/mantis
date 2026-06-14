@@ -108,6 +108,8 @@ class ByrealCLIRunner:
         ]
         if self._dry_run:
             args.append("--dry-run")
+        else:
+            args.append("--confirm")
         return self._run(args)
 
     def positions_copy(

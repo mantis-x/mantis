@@ -158,7 +158,7 @@ class ERC8004Logger:
                 "chainId":  self._chain_id,
             })
             signed  = self._w3.eth.account.sign_transaction(tx, self._account.key)
-            tx_hash = self._w3.eth.send_raw_transaction(signed.raw_transaction)
+            tx_hash = self._w3.eth.send_raw_transaction(signed.rawTransaction)
             receipt = self._w3.eth.wait_for_transaction_receipt(tx_hash, timeout=60)
 
             if receipt["status"] == 1:
@@ -197,7 +197,7 @@ class ERC8004Logger:
                 "chainId":  self._chain_id,
             })
             signed  = self._w3.eth.account.sign_transaction(tx, self._account.key)
-            tx_hash = self._w3.eth.send_raw_transaction(signed.raw_transaction)
+            tx_hash = self._w3.eth.send_raw_transaction(signed.rawTransaction)
             receipt = self._w3.eth.wait_for_transaction_receipt(tx_hash, timeout=60)
             agent_id = int(receipt["logs"][0]["topics"][1].hex(), 16)
             log.info("Agent minted: id=%d owner=%s tx=%s", agent_id, owner_wallet[:12], tx_hash.hex()[:14])
