@@ -1,0 +1,27 @@
+# Shared / DB
+sqlalchemy==2.0.30
+alembic==1.13.1
+psycopg2-binary==2.9.9
+pydantic==2.7.1
+python-dotenv==1.0.1
+
+# Redis
+redis==5.0.4
+
+# Web3 / Blockchain
+web3==6.20.1
+eth-abi==5.1.0
+
+# HTTP
+aiohttp==3.9.5
+requests==2.32.3
+
+# Detection
+numpy==1.26.4
+networkx==3.3
+
+# Enrichment
+anthropic==0.28.0
+
+# Delivery
+python-telegram-bot==21.3
