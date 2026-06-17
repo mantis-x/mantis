@@ -62,6 +62,8 @@ services:
   delivery:
     build: ./packages/delivery
     env_file: .env
+    ports:
+      - "${LINE_PORT:-8000}:${LINE_PORT:-8000}"   # LINE webhook server (only used if LINE_* env vars are set)
     depends_on:
       postgres: { condition: service_healthy }
       redis:    { condition: service_healthy }

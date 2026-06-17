@@ -1,10 +1,14 @@
 """
-Delivery Worker — entry point for Mantis Scout Telegram bot.
+Delivery Worker — entry point for Mantis Scout bots.
 Run: python -m src.worker (from packages/delivery/)
 
-Runs two concurrent tasks:
-  1. Telegram bot — handles user commands
-  2. Signal dispatcher — polls Redis mantis:signals and pushes to subscribers
+Runs concurrent tasks:
+  1. Telegram bot   — handles user commands (always on, requires TELEGRAM_BOT_TOKEN)
+  2. Discord bot    — handles user commands (optional, requires DISCORD_BOT_TOKEN)
+  3. LINE bot        — webhook server for user commands (optional, requires
+                        LINE_CHANNEL_ACCESS_TOKEN + LINE_CHANNEL_SECRET)
+  4. Signal dispatcher — polls Redis mantis:signals and pushes to subscribers
+                          on every enabled platform
 
 Redis key:
   INPUT: mantis:signals  (enrichment worker writes here)
@@ -36,7 +40,11 @@ from telegram.error import TelegramError
 
 from src.telegram.commands import register_handlers
 from src.telegram.subscription_manager import SubscriptionManager
-from src.formatters.signal_card import format_signal_card
+from src.formatters.signal_card import (
+    format_signal_card,
+    format_signal_card_markdown,
+    format_signal_card_plain,
+)
 from src.audit.on_chain_logger import OnChainLogger
 
 # Shared state
@@ -50,13 +58,22 @@ stats       = {
 }
 
 
-async def dispatch_signals(bot: Bot, redis_url: str) -> None:
+async def dispatch_signals(
+    bot: Bot,
+    redis_url: str,
+    discord_bot=None,
+    line_messaging_api=None,
+) -> None:
     """
-    Continuously poll Redis for new signals and push to subscribers.
-    Runs as a background task alongside the Telegram bot.
+    Continuously poll Redis for new signals and push to subscribers
+    across every enabled platform (Telegram, Discord, LINE).
+    Runs as a background task alongside the chat bots.
     """
     import redis.asyncio as aioredis
     r = aioredis.from_url(redis_url, decode_responses=True)
+
+    from src.discord.bot import discord_sub_manager, send_signal_to_subscribers as send_discord
+    from src.line.bot import line_sub_manager, send_signal_to_subscribers as send_line
 
     # Initialise on-chain audit logger
     try:
@@ -113,7 +130,29 @@ async def dispatch_signals(bot: Bot, redis_url: str) -> None:
                 except TelegramError as exc:
                     log.warning("Failed to send to chat_id=%d: %s", chat_id, exc)
 
-            log.info("Signal dispatched to %d/%d subscribers", sent, len(recipients))
+            log.info("Signal dispatched to %d/%d Telegram subscribers", sent, len(recipients))
+
+            # Fan out to Discord
+            if discord_bot is not None:
+                discord_recipients = discord_sub_manager.get_subscribers(signal)
+                if discord_recipients:
+                    discord_message  = format_signal_card_markdown(signal)
+                    discord_delivered = await send_discord(discord_bot, discord_message, discord_recipients)
+                    for channel_id in discord_delivered:
+                        discord_sub_manager.record_delivery(channel_id)
+                    sent += len(discord_delivered)
+                    log.info("Signal dispatched to %d/%d Discord channels", len(discord_delivered), len(discord_recipients))
+
+            # Fan out to LINE
+            if line_messaging_api is not None:
+                line_recipients = line_sub_manager.get_subscribers(signal)
+                if line_recipients:
+                    line_message   = format_signal_card_plain(signal)
+                    line_delivered = await send_line(line_messaging_api, line_message, line_recipients)
+                    for user_id in line_delivered:
+                        line_sub_manager.record_delivery(user_id)
+                    sent += len(line_delivered)
+                    log.info("Signal dispatched to %d/%d LINE subscribers", len(line_delivered), len(line_recipients))
 
             # Log signal hash on-chain after dispatch
             if audit_logger and sent > 0:
@@ -150,8 +189,13 @@ async def main() -> None:
         log.error("TELEGRAM_BOT_TOKEN not set in .env")
         return
 
+    discord_token        = os.getenv("DISCORD_BOT_TOKEN", "")
+    line_access_token     = os.getenv("LINE_CHANNEL_ACCESS_TOKEN", "")
+    line_channel_secret   = os.getenv("LINE_CHANNEL_SECRET", "")
+    line_port             = int(os.getenv("LINE_PORT", "8000"))
+
     log.info("=" * 50)
-    log.info("  Mantis Scout — Telegram Bot")
+    log.info("  Mantis Scout — Telegram + Discord + LINE")
     log.info("  Mantle DeFi signal delivery")
     log.info("=" * 50)
 
@@ -159,18 +203,43 @@ async def main() -> None:
     app = Application.builder().token(token).build()
     register_handlers(app, sub_manager, stats)
 
-    # Start the bot
+    # Start the Telegram bot
     await app.initialize()
     await app.start()
     await app.updater.start_polling(drop_pending_updates=True)
+    log.info("Telegram bot started — polling for commands")
 
-    log.info("Bot started — polling for commands")
+    background_tasks = []
 
-    # Run signal dispatcher concurrently
+    # Optionally start the Discord bot
+    discord_bot = None
+    if discord_token:
+        from src.discord.bot import build_bot, discord_sub_manager
+        discord_bot = build_bot(discord_sub_manager, stats)
+        background_tasks.append(asyncio.create_task(discord_bot.start(discord_token)))
+        log.info("Discord bot starting...")
+    else:
+        log.info("DISCORD_BOT_TOKEN not set — Discord bot disabled")
+
+    # Optionally start the LINE webhook server
+    line_messaging_api = None
+    line_api_client    = None
+    if line_access_token and line_channel_secret:
+        from src.line.bot import build_messaging_api, run_line_bot, line_sub_manager
+        line_api_client, line_messaging_api = build_messaging_api(line_access_token)
+        background_tasks.append(asyncio.create_task(
+            run_line_bot(line_channel_secret, line_messaging_api, line_sub_manager, stats, port=line_port)
+        ))
+        log.info("LINE bot starting on port %d...", line_port)
+    else:
+        log.info("LINE_CHANNEL_ACCESS_TOKEN/LINE_CHANNEL_SECRET not set — LINE bot disabled")
+
+    # Run signal dispatcher concurrently across every enabled platform
     bot = app.bot
     dispatch_task = asyncio.create_task(
-        dispatch_signals(bot, redis_url)
+        dispatch_signals(bot, redis_url, discord_bot=discord_bot, line_messaging_api=line_messaging_api)
     )
+    background_tasks.append(dispatch_task)
 
     try:
         # Run until interrupted
@@ -178,7 +247,12 @@ async def main() -> None:
     except (KeyboardInterrupt, asyncio.CancelledError):
         pass
     finally:
-        dispatch_task.cancel()
+        for task in background_tasks:
+            task.cancel()
+        if discord_bot is not None:
+            await discord_bot.close()
+        if line_api_client is not None:
+            await line_api_client.close()
         await app.updater.stop()
         await app.stop()
         await app.shutdown()

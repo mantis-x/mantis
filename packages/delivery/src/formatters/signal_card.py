@@ -109,6 +109,118 @@ def format_signal_card(signal: dict, audit_tx_hash: Optional[str] = None) -> str
     return "\n".join(lines)
 
 
+def format_signal_card_markdown(signal: dict, audit_tx_hash: Optional[str] = None) -> str:
+    """
+    Format a signal dict for platforms that support light Markdown
+    (Discord) — bold via **text**, no HTML tags.
+    """
+    signal_type  = signal.get("signal_type", "unusual_volume")
+    protocol     = signal.get("protocol", "unknown")
+    confidence   = int(signal.get("confidence", 0))
+    summary      = signal.get("summary", "Unusual on-chain activity detected.")
+    key_factors  = signal.get("key_factors", [])
+    z_score      = float(signal.get("z_score", 0))
+    volume_usd   = float(signal.get("total_volume_usd", 0))
+    event_type   = signal.get("event_type", "swap")
+    pool_address = signal.get("pool_address", "")
+    wallets      = signal.get("wallets", [])
+
+    emoji        = SIGNAL_EMOJIS.get(signal_type, "🔍")
+    label        = SIGNAL_LABELS.get(signal_type, "Signal")
+    proto_name   = PROTOCOL_NAMES.get(protocol, protocol.title())
+
+    pool_short   = f"{pool_address[:6]}...{pool_address[-4:]}" if pool_address else "unknown"
+    explorer_url = f"https://explorer.mantle.xyz/address/{pool_address}"
+
+    lines = [
+        f"{emoji} **Mantis Scout — {label}**",
+        f"_{proto_name} · Mantle_",
+        "",
+        f"**Signal**  {confidence_bar(confidence)}",
+        f"**Volume**  {format_usd(volume_usd)} ({event_type})",
+        f"**Z-score**  {z_score:.2f}σ above 14-day baseline",
+        f"**Wallets**  {len(wallets)} detected",
+        "",
+        "📋 **What happened**",
+        summary,
+        "",
+    ]
+
+    if key_factors:
+        lines.append("🔎 **Key factors**")
+        for factor in key_factors[:3]:
+            lines.append(f"  • {factor}")
+        lines.append("")
+
+    if audit_tx_hash:
+        audit_url = f"https://explorer.mantle.xyz/tx/{audit_tx_hash}"
+        lines.append(f"🔐 **On-chain proof**  verify signal: {audit_url}")
+    else:
+        lines.append(f"🔐 **Pool** {pool_short}  {explorer_url}")
+
+    lines.append("")
+    lines.append("⚠️ _Not financial advice. DYOR._")
+    lines.append("_Mantis Scout · mantis-x/mantis_")
+
+    return "\n".join(lines)
+
+
+def format_signal_card_plain(signal: dict, audit_tx_hash: Optional[str] = None) -> str:
+    """
+    Format a signal dict as plain text — for platforms with no rich
+    formatting support (LINE Messaging API text messages).
+    """
+    signal_type  = signal.get("signal_type", "unusual_volume")
+    protocol     = signal.get("protocol", "unknown")
+    confidence   = int(signal.get("confidence", 0))
+    summary      = signal.get("summary", "Unusual on-chain activity detected.")
+    key_factors  = signal.get("key_factors", [])
+    z_score      = float(signal.get("z_score", 0))
+    volume_usd   = float(signal.get("total_volume_usd", 0))
+    event_type   = signal.get("event_type", "swap")
+    pool_address = signal.get("pool_address", "")
+    wallets      = signal.get("wallets", [])
+
+    emoji        = SIGNAL_EMOJIS.get(signal_type, "🔍")
+    label        = SIGNAL_LABELS.get(signal_type, "Signal")
+    proto_name   = PROTOCOL_NAMES.get(protocol, protocol.title())
+
+    pool_short   = f"{pool_address[:6]}...{pool_address[-4:]}" if pool_address else "unknown"
+    explorer_url = f"https://explorer.mantle.xyz/address/{pool_address}"
+
+    lines = [
+        f"{emoji} Mantis Scout — {label}",
+        f"{proto_name} · Mantle",
+        "",
+        f"Signal  {confidence_bar(confidence)}",
+        f"Volume  {format_usd(volume_usd)} ({event_type})",
+        f"Z-score  {z_score:.2f}σ above 14-day baseline",
+        f"Wallets  {len(wallets)} detected",
+        "",
+        "What happened:",
+        summary,
+        "",
+    ]
+
+    if key_factors:
+        lines.append("Key factors:")
+        for factor in key_factors[:3]:
+            lines.append(f"  • {factor}")
+        lines.append("")
+
+    if audit_tx_hash:
+        audit_url = f"https://explorer.mantle.xyz/tx/{audit_tx_hash}"
+        lines.append(f"On-chain proof — verify signal: {audit_url}")
+    else:
+        lines.append(f"Pool: {pool_short}  {explorer_url}")
+
+    lines.append("")
+    lines.append("Not financial advice. DYOR.")
+    lines.append("Mantis Scout · mantis-x/mantis")
+
+    return "\n".join(lines)
+
+
 def format_status_card(stats: dict) -> str:
     """Format a /status response."""
     return (
@@ -136,5 +248,36 @@ def format_history_card(signals: list) -> str:
         vol      = format_usd(float(s.get("total_volume_usd", 0)))
         emoji    = SIGNAL_EMOJIS.get(s.get("signal_type", ""), "🔍")
         lines.append(f"{i}. {emoji} <b>{sig_type}</b> · {proto} · {vol} · {conf}% conf")
+
+    return "\n".join(lines)
+
+
+def format_status_card_plain(stats: dict) -> str:
+    """Plain-text /status response — for LINE / Discord."""
+    return (
+        "Mantis Scout — Status\n"
+        "\n"
+        "Live — Mantle mainnet\n"
+        f"Pools tracked: {stats.get('pools', 11)}\n"
+        f"Signals today: {stats.get('signals_today', 0)}\n"
+        f"Candidates scored: {stats.get('candidates', 0)}\n"
+        "\n"
+        "Commands: subscribe, unsubscribe, history, help"
+    )
+
+
+def format_history_card_plain(signals: list) -> str:
+    """Plain-text /history response — for LINE / Discord."""
+    if not signals:
+        return "No signals yet. Mantis Scout is watching the market."
+
+    lines = ["Recent signals:\n"]
+    for i, s in enumerate(signals[:5], 1):
+        sig_type = SIGNAL_LABELS.get(s.get("signal_type", ""), "Signal")
+        conf     = int(s.get("confidence", 0))
+        proto    = PROTOCOL_NAMES.get(s.get("protocol", ""), "Unknown")
+        vol      = format_usd(float(s.get("total_volume_usd", 0)))
+        emoji    = SIGNAL_EMOJIS.get(s.get("signal_type", ""), "🔍")
+        lines.append(f"{i}. {emoji} {sig_type} · {proto} · {vol} · {conf}% conf")
 
     return "\n".join(lines)
