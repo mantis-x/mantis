@@ -551,6 +551,128 @@
       background: #F59E0B;
     }
 
+    /* ── EXECUTE PROOF ── */
+    .proof-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1rem;
+      margin-bottom: 2rem;
+    }
+
+    .proof-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 1.75rem;
+    }
+
+    .proof-card.full-width {
+      grid-column: 1 / -1;
+    }
+
+    .proof-card-label {
+      font-family: var(--mono);
+      font-size: 0.6rem;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--text-3);
+      margin-bottom: 0.5rem;
+    }
+
+    .proof-card-title {
+      font-family: var(--display);
+      font-weight: 600;
+      font-size: 1rem;
+      color: var(--text);
+      margin-bottom: 0.35rem;
+    }
+
+    .proof-card-desc {
+      font-size: 0.82rem;
+      color: var(--text-2);
+      line-height: 1.6;
+      margin-bottom: 1.25rem;
+    }
+
+    .proof-tx {
+      font-family: var(--mono);
+      font-size: 0.72rem;
+      color: var(--green);
+      background: var(--green-mute);
+      padding: 0.6rem 0.75rem;
+      border-radius: 4px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 0.5rem;
+      text-decoration: none;
+      transition: background 0.2s;
+      word-break: break-all;
+    }
+
+    .proof-tx:hover { background: #243322; }
+
+    .proof-tx-arrow {
+      font-size: 0.7rem;
+      color: var(--text-3);
+      flex-shrink: 0;
+    }
+
+    .proof-steps {
+      list-style: none;
+      display: flex;
+      flex-direction: column;
+      gap: 0.75rem;
+      margin-top: 0.5rem;
+    }
+
+    .proof-steps li {
+      font-size: 0.82rem;
+      color: var(--text-2);
+      display: flex;
+      align-items: flex-start;
+      gap: 0.75rem;
+      line-height: 1.5;
+    }
+
+    .proof-step-num {
+      font-family: var(--mono);
+      font-size: 0.6rem;
+      color: var(--green);
+      background: var(--green-mute);
+      padding: 0.15rem 0.4rem;
+      border-radius: 3px;
+      flex-shrink: 0;
+      margin-top: 2px;
+    }
+
+    .proof-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.4rem;
+      font-family: var(--mono);
+      font-size: 0.62rem;
+      color: var(--green);
+      background: var(--green-mute);
+      border: 1px solid var(--green-dim);
+      padding: 0.3rem 0.65rem;
+      border-radius: 3px;
+      margin-top: 1rem;
+    }
+
+    .proof-badge::before {
+      content: '';
+      width: 6px; height: 6px;
+      border-radius: 50%;
+      background: var(--green);
+      animation: pulse 1.5s ease-in-out infinite;
+    }
+
+    @media (max-width: 768px) {
+      .proof-grid { grid-template-columns: 1fr; }
+      .proof-card.full-width { grid-column: 1; }
+    }
+
     /* ── STACK ── */
     .stack-grid {
       display: flex;
@@ -716,6 +838,7 @@
     <li><a href="#product">Product</a></li>
     <li><a href="#pipeline">Pipeline</a></li>
     <li><a href="#contracts">Contracts</a></li>
+    <li><a href="#proof">On-Chain Proof</a></li>
     <li><a href="https://github.com/mantis-x/mantis" target="_blank" rel="noopener">GitHub</a></li>
     <li><a href="https://t.me/MantisScoutBot" target="_blank" rel="noopener" class="nav-cta">Try Scout →</a></li>
   </ul>
@@ -893,6 +1016,67 @@
           <span class="copy-hint">copy</span>
         </div>
         <div class="contract-network">Mantle Sepolia Testnet</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<hr class="section-divider" />
+
+<!-- EXECUTE PROOF -->
+<section id="proof">
+  <div class="section">
+    <p class="section-label">On-Chain Proof</p>
+    <h2>Execute confirmed.<br />On Mantle. Verifiable by anyone.</h2>
+    <p class="section-intro">
+      Every agent decision — including the first real execution — is permanently recorded on Mantle Sepolia. Judges can verify live during Demo Day.
+    </p>
+
+    <div class="proof-grid">
+      <div class="proof-card">
+        <div class="proof-card-label">Confirmed Transaction · AgentIdentity.sol</div>
+        <div class="proof-card-title">First Execute — On-Chain</div>
+        <div class="proof-card-desc">
+          Mantis Execute called AgentIdentity.sol on Mantle Sepolia, logging the agent's first autonomous decision to its ERC-8004 reputation ledger. The transaction is immutable and publicly verifiable.
+        </div>
+        <a class="proof-tx" href="https://sepolia.mantlescan.xyz/tx/0x5eab39440e570a906a80347e516d0b2928518d4fd5867d590d403995b3d211b0" target="_blank" rel="noopener">
+          <span>0x5eab39440e57…b3d211b0 · AgentIdentity interaction</span>
+          <span class="proof-tx-arrow">↗ View on Explorer</span>
+        </a>
+        <div class="proof-badge">Confirmed · Mantle Sepolia</div>
+      </div>
+
+      <div class="proof-card">
+        <div class="proof-card-label">How Execute Works</div>
+        <div class="proof-card-title">Signal → Guard → Execute → Log</div>
+        <div class="proof-card-desc">
+          The full autonomous loop — from Scout signal to on-chain execution — runs without human intervention.
+        </div>
+        <ul class="proof-steps">
+          <li><span class="proof-step-num">01</span> Scout fires signal with confidence score ≥ threshold</li>
+          <li><span class="proof-step-num">02</span> Intent engine evaluates user-defined rules</li>
+          <li><span class="proof-step-num">03</span> Safety guards check position cap, slippage, blacklist</li>
+          <li><span class="proof-step-num">04</span> Byreal Skills CLI executes swap on Mantle</li>
+          <li><span class="proof-step-num">05</span> Decision logged to AgentIdentity.sol — including aborts</li>
+        </ul>
+      </div>
+
+      <div class="proof-card full-width">
+        <div class="proof-card-label">ERC-8004 Agent Identity · Mantle Sepolia</div>
+        <div class="proof-card-title">AgentIdentity.sol — On-Chain Reputation Ledger</div>
+        <div class="proof-card-desc">
+          Every Mantis Execute agent is issued an ERC-8004 identity NFT on Mantle. Every decision — execute, abort, guard-reject — is logged permanently. No silent failures. No black box. Agents build a verifiable reputation over time.
+        </div>
+        <a class="proof-tx" href="https://sepolia.mantlescan.xyz/address/0x06036B53A1f8d2Cf691a6f324C0672eB6D865667" target="_blank" rel="noopener">
+          <span>0x06036B53A1f8d2Cf691a6f324C0672eB6D865667</span>
+          <span class="proof-tx-arrow">↗ View Contract</span>
+        </a>
+        <div style="margin-top:0.75rem">
+          <a class="proof-tx" href="https://sepolia.mantlescan.xyz/address/0xd745Fc0c28B8755b6280232a179e21C50B1D3adf" target="_blank" rel="noopener">
+            <span>0xd745Fc0c28B8755b6280232a179e21C50B1D3adf · SignalAuditLog.sol</span>
+            <span class="proof-tx-arrow">↗ View Contract</span>
+          </a>
+        </div>
       </div>
     </div>
   </div>
