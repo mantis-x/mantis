@@ -28,6 +28,7 @@ class Signal:
     id:           Optional[int]   # assigned when persisted to DB
 
     # Source
+    chain:        str             # "mantle" | "arbitrum" | …
     protocol:     str             # "agni_finance" | "merchant_moe" | "fluxion"
     pool_address: str
     wallets:      list[str]       # wallet addresses in the cluster
@@ -61,9 +62,12 @@ class Signal:
         """
         Stable JSON for keccak256 hashing — keys alphabetically ordered.
         Must match the Python delivery worker AND Solidity verify() function.
+        "chain" is first alphabetically; adding it is backward-compatible with
+        the contract because it hashes the full string opaquely.
         """
         import json
         return json.dumps({
+            "chain":       self.chain,
             "confidence":  self.confidence,
             "deliver_at":  self.deliver_at.isoformat(),
             "id":          self.id or 0,
@@ -76,6 +80,7 @@ class Signal:
     def to_dict(self) -> dict:
         return {
             "id":              self.id,
+            "chain":           self.chain,
             "protocol":        self.protocol,
             "pool_address":    self.pool_address,
             "wallets":         self.wallets,

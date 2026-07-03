@@ -94,15 +94,13 @@ class PoolBaseline:
 
 class BaselineStore:
     """
-    Registry of PoolBaseline instances.
-    One store per ingestion worker session.
+    Registry of PoolBaseline instances, keyed by (chain, pool_address, event_type).
+    One store per detection worker session.
     """
 
     def __init__(self):
-        # (pool_address, event_type) → PoolBaseline
-        self._baselines: dict[tuple, PoolBaseline] = defaultdict(
-            lambda: PoolBaseline("", "")
-        )
+        # (chain, pool_address, event_type) → PoolBaseline
+        self._baselines: dict[tuple, PoolBaseline] = {}
 
     def record(
         self,
@@ -110,8 +108,9 @@ class BaselineStore:
         event_type:   str,
         amount_usd:   float,
         timestamp:    float,
+        chain:        str = "mantle",
     ) -> None:
-        key = (pool_address.lower(), event_type)
+        key = (chain, pool_address.lower(), event_type)
         if key not in self._baselines:
             self._baselines[key] = PoolBaseline(pool_address, event_type)
         self._baselines[key].record(amount_usd, timestamp)
@@ -121,15 +120,21 @@ class BaselineStore:
         pool_address: str,
         event_type:   str,
         observed_usd: float,
+        chain:        str = "mantle",
     ) -> Optional[float]:
-        key = (pool_address.lower(), event_type)
+        key = (chain, pool_address.lower(), event_type)
         bl  = self._baselines.get(key)
         if bl is None:
             return None
         return bl.z_score(observed_usd)
 
-    def stats(self, pool_address: str, event_type: str) -> Optional[BaselineStats]:
-        key = (pool_address.lower(), event_type)
+    def stats(
+        self,
+        pool_address: str,
+        event_type:   str,
+        chain:        str = "mantle",
+    ) -> Optional[BaselineStats]:
+        key = (chain, pool_address.lower(), event_type)
         bl  = self._baselines.get(key)
         return bl.stats() if bl else None
 
@@ -141,6 +146,7 @@ class BaselineStore:
         Seed baselines from historical events so the detector
         can score immediately without waiting 14 days.
         Each event must have: pool_address, event_type, amount_usd, timestamp
+        Optional: chain (default "mantle")
         """
         for e in historical_events:
             self.record(
@@ -148,8 +154,9 @@ class BaselineStore:
                 e["event_type"],
                 e["amount_usd"],
                 e["timestamp"],
+                chain=e.get("chain", "mantle"),
             )
         log.info(
-            "Baseline seeded from %d historical events across %d pools",
+            "Baseline seeded from %d historical events across %d (chain, pool) pairs",
             len(historical_events), self.pool_count(),
         )

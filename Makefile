@@ -9,7 +9,7 @@ help:
 	@echo "  make ingest    Start ingestion worker"
 	@echo "  make detect    Start detection worker"
 	@echo "  make enrich    Start enrichment worker"
-	@echo "  make deliver   Start Telegram delivery (Track 2)"
+	@echo "  make deliver   Start Telegram/Discord/LINE delivery (Track 2)"
 	@echo "  make execute   Start Mantis Execute agent (Track 6)"
 	@echo "  make all       Start full pipeline (all workers)"
 	@echo "  make test      Run all test suites"

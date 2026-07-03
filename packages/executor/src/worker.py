@@ -75,6 +75,15 @@ async def main() -> None:
             signal = json.loads(items[0])
             processed += 1
 
+            # Execution is Mantle-only in Phase 1; Arbitrum signals are alert-only
+            if signal.get("chain", "mantle") != "mantle":
+                log.info(
+                    "Skipping execution for chain=%s — Mantle-only in Phase 1",
+                    signal.get("chain"),
+                )
+                await r.lpop("mantis:signals")
+                continue
+
             results = executor.process_signal(signal)
 
             for result in results:

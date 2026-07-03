@@ -1,6 +1,6 @@
 """
 NormalisedEvent — the canonical data model for every on-chain event
-ingested from Mantle DeFi protocols.
+ingested from DeFi protocols across all supported chains.
 
 This dataclass is the contract between ingestion and detection.
 All protocol decoders must return NormalisedEvent instances.
@@ -13,9 +13,13 @@ from typing import Optional
 
 
 class Protocol(str, Enum):
+    # Mantle
     AGNI_FINANCE  = "agni_finance"
     MERCHANT_MOE  = "merchant_moe"
     FLUXION       = "fluxion"
+    # Arbitrum (Phase 1)
+    UNISWAP_V3    = "uniswap_v3"
+    TRADER_JOE    = "trader_joe"
 
 
 class EventType(str, Enum):
@@ -30,6 +34,9 @@ class NormalisedEvent:
     block_number:   int
     tx_hash:        str
     log_index:      int
+
+    # Chain
+    chain:          str       # "mantle" | "arbitrum" | …
 
     # Protocol
     protocol:       Protocol
@@ -61,5 +68,5 @@ class NormalisedEvent:
 
     @property
     def unique_id(self) -> str:
-        """Dedup key — one event per (tx, log_index)."""
-        return f"{self.tx_hash}:{self.log_index}"
+        """Dedup key — one event per (chain, tx, log_index)."""
+        return f"{self.chain}:{self.tx_hash}:{self.log_index}"

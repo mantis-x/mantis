@@ -111,6 +111,7 @@ class WalletClusterer:
     ) -> WalletCluster:
         return WalletCluster(
             wallets          = wallets,
+            chain            = events[0].chain,
             pool_address     = events[0].pool_address,
             protocol         = events[0].protocol,
             event_type       = events[0].event_type,
@@ -124,6 +125,7 @@ class WalletClusterer:
     def _solo_cluster(self, event: ScoredEvent) -> WalletCluster:
         return WalletCluster(
             wallets          = [event.wallet_address],
+            chain            = event.chain,
             pool_address     = event.pool_address,
             protocol         = event.protocol,
             event_type       = event.event_type,

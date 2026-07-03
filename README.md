@@ -14,9 +14,9 @@ at the Mantle Turing Test Hackathon 2026.
 DeFi protocols — Agni Finance, Merchant Moe, Fluxion — around the clock.
 It detects smart money wallet clusters using z-score anomaly detection,
 enriches each signal through Claude Sonnet, and delivers plain-English alerts
-with confidence scores directly to Telegram. Every signal is hashed and
-recorded immutably on-chain via `SignalAuditLog.sol` — fully auditable,
-forever.
+with confidence scores directly to Telegram, Discord, and LINE. Every signal
+is hashed and recorded immutably on-chain via `SignalAuditLog.sol` — fully
+auditable, forever.
 
 **Mantis Execute** is the execution layer. An intent-based agentic wallet
 powered by the Byreal Skills CLI. You define your intent once — "follow smart
@@ -39,7 +39,7 @@ mantis/
 │   ├── ingestion/   # Mantle RPC poller + Agni / Merchant Moe / Fluxion decoders
 │   ├── detection/   # Z-score anomaly detection + wallet clustering
 │   ├── enrichment/  # LLM signal enrichment via Claude Sonnet
-│   ├── delivery/    # Telegram bot + on-chain audit logger  (Mantis Scout)
+│   ├── delivery/    # Telegram + Discord + LINE bots + on-chain audit logger  (Mantis Scout)
 │   └── executor/    # Intent engine + Byreal execution + ERC-8004  (Mantis Execute)
 ├── contracts/       # Solidity: SignalAuditLog.sol + AgentIdentity.sol
 ├── scripts/         # Dev utilities: backtest, replay, health checks
@@ -56,7 +56,7 @@ docker-compose up -d        # start Postgres + Redis
 make migrate                # run DB migrations
 make ingest                 # start ingestion worker
 make detect                 # start detection + enrichment
-make deliver                # start Mantis Scout Telegram bot
+make deliver                # start Mantis Scout bots (Telegram, + Discord/LINE if configured)
 make execute                # start Mantis Execute agent
 ```
 
@@ -83,7 +83,9 @@ See `.env.example` for all required keys:
 | `NANSEN_API_KEY` | ingestion — wallet intelligence |
 | `ELFA_API_KEY` | enrichment — protocol sentiment |
 | `ANTHROPIC_API_KEY` | enrichment — Claude Sonnet |
-| `TELEGRAM_BOT_TOKEN` | delivery — Mantis Scout bot |
+| `TELEGRAM_BOT_TOKEN` | delivery — Mantis Scout Telegram bot |
+| `DISCORD_BOT_TOKEN` | delivery — Mantis Scout Discord bot (optional) |
+| `LINE_CHANNEL_ACCESS_TOKEN` / `LINE_CHANNEL_SECRET` | delivery — Mantis Scout LINE bot (optional) |
 | `BYREAL_PRIVATE_KEY` | executor — Mantis Execute agent wallet |
 | `AUDIT_CONTRACT_ADDRESS` | delivery — SignalAuditLog.sol |
 | `AGENT_IDENTITY_CONTRACT_ADDRESS` | executor — AgentIdentity.sol |
@@ -99,6 +101,8 @@ See `.env.example` for all required keys:
 | LLM enrichment | `enrichment/` | Shared |
 | Signal queue (5-min delay) | `shared/queue/` | Shared |
 | Telegram delivery | `delivery/telegram/` | Track 2 — Mantis Scout |
+| Discord delivery | `delivery/discord/` | Track 2 — Mantis Scout |
+| LINE delivery | `delivery/line/` | Track 2 — Mantis Scout |
 | On-chain audit log | `delivery/audit/` | Track 2 — Mantis Scout |
 | Intent rule engine | `executor/intent/` | Track 6 — Mantis Execute |
 | Safety guards | `executor/guards/` | Track 6 — Mantis Execute |
@@ -110,7 +114,8 @@ See `.env.example` for all required keys:
 ## Stack
 
 Python 3.12 · Solidity 0.8.20 · web3.py · Claude Sonnet · Byreal Skills CLI ·
-Nansen API · Elfa AI · Telegram Bot API · Postgres · Redis · Hardhat · Docker
+Nansen API · Elfa AI · Telegram Bot API · Discord API · LINE Messaging API ·
+Postgres · Redis · Hardhat · Docker
 
 ---
 
