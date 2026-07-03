@@ -1,0 +1,10 @@
+{
+  "network": "arbitrumSepolia",
+  "chainId": 421614,
+  "contract": "SignalAuditLog",
+  "address": "0xd745Fc0c28B8755b6280232a179e21C50B1D3adf",
+  "txHash": "0x4c37be5834293a3969a8ef3056fee3b5e7e62fb334431f9d8ca7d14d04a77586",
+  "deployer": "0xbd1C2da129DA73308Fa9F2E19F633A2A3972Dc80",
+  "logger": "0xbd1C2da129DA73308Fa9F2E19F633A2A3972Dc80",
+  "deployedAt": "2026-07-03T14:40:39.125Z"
+}

@@ -4,9 +4,9 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Mantis — See the move. Make the move.</title>
-  <meta name="description" content="Signal-to-execution AI on Mantle. Scout detects smart money. Execute acts on it." />
+  <meta name="description" content="Signal-to-execution AI on Mantle and Arbitrum. Scout detects smart money. Execute acts on it." />
   <meta property="og:title" content="Mantis — See the move. Make the move." />
-  <meta property="og:description" content="Signal-to-execution AI on Mantle. Scout detects smart money. Execute acts on it." />
+  <meta property="og:description" content="Signal-to-execution AI on Mantle and Arbitrum. Scout detects smart money. Execute acts on it." />
   <meta property="og:type" content="website" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -847,10 +847,10 @@
 <!-- HERO -->
 <section>
   <div class="hero">
-    <p class="hero-eyebrow">Mantle · Track 2 × Track 6 · Turing Test Hackathon 2026</p>
+    <p class="hero-eyebrow">Mantle · Arbitrum · Track 2 × Track 6 · Turing Test Hackathon 2026</p>
     <h1>See the move.<br /><em>Make the move.</em></h1>
     <p class="hero-sub">
-      Signal-to-execution AI built entirely on Mantle. Scout detects smart money in real time. Execute acts on it autonomously.
+      Signal-to-execution AI running on Mantle and Arbitrum. Scout detects smart money in real time. Execute acts on it autonomously.
     </p>
     <div class="hero-actions">
       <a href="https://t.me/MantisScoutBot" target="_blank" rel="noopener" class="btn-primary">
@@ -872,7 +872,7 @@
     <div class="ticker-window">
       <div class="ticker-header">
         <span class="ticker-dot"></span>
-        <span class="ticker-header-label">mantis-scout · mantle mainnet · streaming</span>
+        <span class="ticker-header-label">mantis-scout · mantle + arbitrum · streaming</span>
       </div>
       <div class="ticker-feed" id="tickerFeed">
         <!-- populated by JS -->
@@ -897,14 +897,14 @@
         <span class="product-tag">Track 2 · AI Alpha & Data</span>
         <h3>Mantis Scout</h3>
         <p class="product-desc">
-          The intelligence layer. Monitors Agni Finance, Merchant Moe, and Fluxion around the clock. Detects smart money wallet clusters using z-score anomaly detection, enriches each signal through Claude Sonnet, and delivers plain-English alerts with confidence scores to Telegram. Every signal is hashed and recorded immutably on-chain via <code style="font-family:var(--mono);font-size:0.8em;color:var(--green)">SignalAuditLog.sol</code>.
+          The intelligence layer. Monitors Agni Finance, Merchant Moe, and Fluxion on Mantle — plus Uniswap V3 and Trader Joe on Arbitrum — around the clock. Detects smart money wallet clusters using z-score anomaly detection, enriches each signal through Claude Sonnet, and delivers plain-English alerts with confidence scores to Telegram. Every signal is hashed and recorded immutably on-chain via <code style="font-family:var(--mono);font-size:0.8em;color:var(--green)">SignalAuditLog.sol</code>.
         </p>
         <ul class="product-specs">
           <li>Z-score anomaly detection across wallet clusters</li>
           <li>Claude Sonnet enrichment with confidence scoring</li>
           <li>Telegram delivery with instant signal alerts</li>
           <li>Immutable on-chain audit log per signal</li>
-          <li>Nansen wallet intelligence + Elfa AI sentiment</li>
+          <li>Multi-chain: Mantle + Arbitrum from one deployment</li>
         </ul>
       </div>
       <div class="product-card">
@@ -947,14 +947,14 @@
     <p class="section-label">How It Works</p>
     <h2>Signal detected. Agent triggered.<br />Position opened. Outcome logged.</h2>
     <p class="section-intro">
-      Every step in the pipeline runs on Mantle — from raw RPC data to on-chain execution record.
+      One deployment, two chains. Mantle and Arbitrum feed a single pipeline — from raw RPC data to on-chain execution record.
     </p>
 
     <div class="pipeline">
       <div class="pipe-step">
         <div class="pipe-num">01</div>
         <div class="pipe-name">Ingest</div>
-        <div class="pipe-detail">Mantle RPC polling. Protocol decoders for Agni, Merchant Moe, Fluxion.</div>
+        <div class="pipe-detail">Mantle + Arbitrum RPC polling. Decoders for Agni, Merchant Moe, Fluxion, Uniswap V3, Trader Joe.</div>
         <div class="pipe-pkg">ingestion/</div>
       </div>
       <div class="pipe-step">
@@ -993,7 +993,7 @@
     <p class="section-label">On-Chain</p>
     <h2>Fully auditable. Forever.</h2>
     <p class="section-intro">
-      Two contracts on Mantle Sepolia. Every signal hashed. Every agent decision recorded. Nothing off-chain, nothing hidden.
+      Four contracts across Mantle Sepolia and Arbitrum Sepolia. Every signal hashed. Every agent decision recorded. Nothing off-chain, nothing hidden.
     </p>
 
     <div class="contracts-grid">
@@ -1002,7 +1002,7 @@
         <div class="contract-purpose">Immutable keccak256 hash log of every Scout signal. If Scout fires, it's on-chain — always.</div>
         <div class="contract-addr-label">Contract Address · Mantle Sepolia</div>
         <div class="contract-addr" onclick="copyAddr(this, 'SIGNAL_CONTRACT_ADDRESS')" title="Click to copy">
-          <span id="SIGNAL_CONTRACT_ADDRESS">Deploying to Mantle Sepolia…</span>
+          <span id="SIGNAL_CONTRACT_ADDRESS">0xd745Fc0c28B8755b6280232a179e21C50B1D3adf</span>
           <span class="copy-hint">copy</span>
         </div>
         <div class="contract-network">Mantle Sepolia Testnet</div>
@@ -1012,10 +1012,30 @@
         <div class="contract-purpose">ERC-8004 on-chain reputation ledger for Execute agents. Tracks every decision, including aborts.</div>
         <div class="contract-addr-label">Contract Address · Mantle Sepolia</div>
         <div class="contract-addr" onclick="copyAddr(this, 'AGENT_CONTRACT_ADDRESS')" title="Click to copy">
-          <span id="AGENT_CONTRACT_ADDRESS">Deploying to Mantle Sepolia…</span>
+          <span id="AGENT_CONTRACT_ADDRESS">0x06036B53A1f8d2Cf691a6f324C0672eB6D865667</span>
           <span class="copy-hint">copy</span>
         </div>
         <div class="contract-network">Mantle Sepolia Testnet</div>
+      </div>
+      <div class="contract-card">
+        <div class="contract-name">SignalAuditLog.sol</div>
+        <div class="contract-purpose">Same audit contract deployed on Arbitrum Sepolia. Arbitrum signals hashed on their native chain.</div>
+        <div class="contract-addr-label">Contract Address · Arbitrum Sepolia</div>
+        <div class="contract-addr" onclick="copyAddr(this, 'ARB_SIGNAL_CONTRACT_ADDRESS')" title="Click to copy">
+          <span id="ARB_SIGNAL_CONTRACT_ADDRESS">0xd745Fc0c28B8755b6280232a179e21C50B1D3adf</span>
+          <span class="copy-hint">copy</span>
+        </div>
+        <a class="contract-network" href="https://sepolia.arbiscan.io/address/0xd745Fc0c28B8755b6280232a179e21C50B1D3adf" target="_blank" rel="noopener" style="text-decoration:none;">Arbitrum Sepolia Testnet ↗</a>
+      </div>
+      <div class="contract-card">
+        <div class="contract-name">AgentIdentity.sol</div>
+        <div class="contract-purpose">ERC-8004 agent identity deployed on Arbitrum Sepolia. Execution reputation is chain-native.</div>
+        <div class="contract-addr-label">Contract Address · Arbitrum Sepolia</div>
+        <div class="contract-addr" onclick="copyAddr(this, 'ARB_AGENT_CONTRACT_ADDRESS')" title="Click to copy">
+          <span id="ARB_AGENT_CONTRACT_ADDRESS">0x06036B53A1f8d2Cf691a6f324C0672eB6D865667</span>
+          <span class="copy-hint">copy</span>
+        </div>
+        <a class="contract-network" href="https://sepolia.arbiscan.io/address/0x06036B53A1f8d2Cf691a6f324C0672eB6D865667" target="_blank" rel="noopener" style="text-decoration:none;">Arbitrum Sepolia Testnet ↗</a>
       </div>
     </div>
   </div>
@@ -1068,13 +1088,25 @@
           Every Mantis Execute agent is issued an ERC-8004 identity NFT on Mantle. Every decision — execute, abort, guard-reject — is logged permanently. No silent failures. No black box. Agents build a verifiable reputation over time.
         </div>
         <a class="proof-tx" href="https://sepolia.mantlescan.xyz/address/0x06036B53A1f8d2Cf691a6f324C0672eB6D865667" target="_blank" rel="noopener">
-          <span>0x06036B53A1f8d2Cf691a6f324C0672eB6D865667</span>
+          <span>0x06036B53A1f8d2Cf691a6f324C0672eB6D865667 · AgentIdentity · Mantle Sepolia</span>
           <span class="proof-tx-arrow">↗ View Contract</span>
         </a>
         <div style="margin-top:0.75rem">
           <a class="proof-tx" href="https://sepolia.mantlescan.xyz/address/0xd745Fc0c28B8755b6280232a179e21C50B1D3adf" target="_blank" rel="noopener">
-            <span>0xd745Fc0c28B8755b6280232a179e21C50B1D3adf · SignalAuditLog.sol</span>
+            <span>0xd745Fc0c28B8755b6280232a179e21C50B1D3adf · SignalAuditLog · Mantle Sepolia</span>
             <span class="proof-tx-arrow">↗ View Contract</span>
+          </a>
+        </div>
+        <div style="margin-top:0.75rem">
+          <a class="proof-tx" href="https://sepolia.arbiscan.io/address/0x06036B53A1f8d2Cf691a6f324C0672eB6D865667" target="_blank" rel="noopener">
+            <span>0x06036B53A1f8d2Cf691a6f324C0672eB6D865667 · AgentIdentity · Arbitrum Sepolia</span>
+            <span class="proof-tx-arrow">↗ View on Arbiscan</span>
+          </a>
+        </div>
+        <div style="margin-top:0.75rem">
+          <a class="proof-tx" href="https://sepolia.arbiscan.io/address/0xd745Fc0c28B8755b6280232a179e21C50B1D3adf" target="_blank" rel="noopener">
+            <span>0xd745Fc0c28B8755b6280232a179e21C50B1D3adf · SignalAuditLog · Arbitrum Sepolia</span>
+            <span class="proof-tx-arrow">↗ View on Arbiscan</span>
           </a>
         </div>
       </div>
@@ -1104,6 +1136,8 @@
       <span class="stack-chip">Docker</span>
       <span class="stack-chip">ERC-8004</span>
       <span class="stack-chip">Mantle L2</span>
+      <span class="stack-chip">Arbitrum L2</span>
+      <span class="stack-chip">Uniswap V3</span>
     </div>
   </div>
 </section>
@@ -1115,9 +1149,10 @@
     <li><a href="https://github.com/mantis-x/mantis" target="_blank" rel="noopener">GitHub</a></li>
     <li><a href="https://dorahacks.io/buidl/44876" target="_blank" rel="noopener">DoraHacks</a></li>
     <li><a href="https://t.me/MantisScoutBot" target="_blank" rel="noopener">Telegram</a></li>
-    <li><a href="https://explorer.sepolia.mantle.xyz" target="_blank" rel="noopener">Explorer</a></li>
+    <li><a href="https://explorer.sepolia.mantle.xyz" target="_blank" rel="noopener">Mantle Explorer</a></li>
+    <li><a href="https://sepolia.arbiscan.io" target="_blank" rel="noopener">Arbiscan</a></li>
   </ul>
-  <div class="footer-built">Built on <span>Mantle</span> · Turing Test Hackathon 2026</div>
+  <div class="footer-built">Built on <span>Mantle</span> &amp; <span>Arbitrum</span> · Turing Test Hackathon 2026</div>
 </footer>
 
 <!-- TOAST -->
@@ -1126,14 +1161,16 @@
 <script>
   // ── SIGNAL TICKER ──
   const signals = [
-    { time: 'just now', signal: 'Smart money cluster → mETH/USDT pool', protocol: 'Agni', conf: 91, cls: 'conf-high' },
-    { time: '2m ago',   signal: 'Whale accumulation detected · 3 wallets',  protocol: 'Merchant Moe', conf: 78, cls: 'conf-mid' },
-    { time: '5m ago',   signal: 'Anomalous LP entry · z-score 3.2σ',        protocol: 'Fluxion', conf: 85, cls: 'conf-high' },
-    { time: '9m ago',   signal: 'Smart money exit · mETH rotation',         protocol: 'Agni', conf: 67, cls: 'conf-mid' },
-    { time: '14m ago',  signal: 'Cluster divergence · 5-wallet group',       protocol: 'Merchant Moe', conf: 55, cls: 'conf-low' },
-    { time: '18m ago',  signal: 'High-confidence LP entry · 4.1σ spike',     protocol: 'Fluxion', conf: 94, cls: 'conf-high' },
-    { time: '23m ago',  signal: 'Smart money cluster · new position opened', protocol: 'Agni', conf: 82, cls: 'conf-high' },
-    { time: '31m ago',  signal: 'Anomaly cleared · signal aborted',          protocol: 'Fluxion', conf: 38, cls: 'conf-low' },
+    { time: 'just now', signal: 'Smart money cluster → mETH/USDT pool',       protocol: 'Agni · Mantle',        conf: 91, cls: 'conf-high' },
+    { time: '2m ago',   signal: 'Whale accumulation · WETH/USDC 0.05%',        protocol: 'Uniswap V3 · Arbitrum', conf: 88, cls: 'conf-high' },
+    { time: '5m ago',   signal: 'Anomalous LP entry · z-score 3.2σ',           protocol: 'Fluxion · Mantle',      conf: 85, cls: 'conf-high' },
+    { time: '8m ago',   signal: 'Whale entry · $2.4M WBTC/WETH swap',          protocol: 'Uniswap V3 · Arbitrum', conf: 79, cls: 'conf-mid' },
+    { time: '12m ago',  signal: 'Smart money exit · mETH rotation',            protocol: 'Agni · Mantle',        conf: 67, cls: 'conf-mid' },
+    { time: '16m ago',  signal: 'Cluster divergence · 5-wallet group',         protocol: 'Merchant Moe · Mantle', conf: 55, cls: 'conf-low' },
+    { time: '20m ago',  signal: 'High-confidence LP entry · 4.1σ spike',       protocol: 'Trader Joe · Arbitrum', conf: 94, cls: 'conf-high' },
+    { time: '26m ago',  signal: 'Smart money cluster · new position opened',   protocol: 'Agni · Mantle',        conf: 82, cls: 'conf-high' },
+    { time: '31m ago',  signal: 'Anomalous volume · ARB/WETH pool · 3.8σ',     protocol: 'Uniswap V3 · Arbitrum', conf: 76, cls: 'conf-mid' },
+    { time: '38m ago',  signal: 'Anomaly cleared · signal aborted',            protocol: 'Fluxion · Mantle',      conf: 38, cls: 'conf-low' },
   ];
 
   function renderTicker() {
