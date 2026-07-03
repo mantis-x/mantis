@@ -2,13 +2,13 @@
 Telegram command handlers for Mantis Scout bot.
 
 Commands:
-  /start       — welcome + subscribe
-  /subscribe   — subscribe to signals
-  /unsubscribe — unsubscribe
-  /status      — bot + market status
-  /history     — last 5 signals
-  /help        — command list
-  /verify <id> — verify a signal on-chain
+  /start                — welcome + subscribe
+  /subscribe [chain]    — subscribe (optional chain filter: mantle | arbitrum | all)
+  /unsubscribe          — unsubscribe
+  /status               — bot + market status
+  /history              — last 5 signals
+  /help                 — command list
+  /verify <id>          — verify a signal on-chain
 """
 from __future__ import annotations
 
@@ -25,18 +25,22 @@ from src.telegram.subscription_manager import SubscriptionManager
 
 log = logging.getLogger(__name__)
 
+SUPPORTED_CHAINS = {"mantle", "arbitrum"}
+
 WELCOME_MSG = """🦟 <b>Welcome to Mantis Scout</b>
 
-I monitor Mantle DeFi 24/7 and alert you when smart money moves.
+I monitor Mantle &amp; Arbitrum DeFi 24/7 and alert you when smart money moves.
 
 <b>What I detect:</b>
   📈 Smart money accumulation
   🐋 Whale entries / exits
   ⚡ Unusual volume spikes
 
+<b>Chains:</b> Mantle · Arbitrum (more coming)
 <b>Every signal is hashed on Mantle — fully auditable.</b>
 
-Use /subscribe to start receiving alerts.
+Use /subscribe to receive alerts from all chains.
+Use /subscribe mantle or /subscribe arbitrum to filter by chain.
 Use /help to see all commands.
 
 Free tier: 3 alerts/day · No credit card needed"""
@@ -44,17 +48,37 @@ Free tier: 3 alerts/day · No credit card needed"""
 
 HELP_MSG = """🦟 <b>Mantis Scout — Commands</b>
 
-/subscribe    Start receiving signals
-/unsubscribe  Stop receiving signals
-/status       Bot status and stats
-/history      Last 5 signals
-/verify &lt;id&gt;  Verify a signal on-chain
-/help         This message
+/subscribe [chain]  Start receiving signals (chain: mantle | arbitrum | all)
+/unsubscribe        Stop receiving signals
+/status             Bot status and stats
+/history            Last 5 signals
+/verify &lt;id&gt;       Verify a signal on-chain
+/help               This message
+
+<b>Chain filters:</b>
+  /subscribe           → all chains
+  /subscribe mantle    → Mantle only
+  /subscribe arbitrum  → Arbitrum only
 
 <b>Free tier:</b> 3 alerts/day
 <b>Pro tier:</b> Unlimited alerts + Execute agent
 
 <i>github.com/mantis-x/mantis</i>"""
+
+
+def _parse_chain_arg(args: list[str]) -> tuple[str | None, str]:
+    """
+    Parse optional chain argument from command args.
+    Returns (chains_set_or_None, display_text).
+    """
+    if not args:
+        return None, "all chains"
+    chain = args[0].lower()
+    if chain == "all":
+        return None, "all chains"
+    if chain in SUPPORTED_CHAINS:
+        return {chain}, chain
+    return "invalid", chain
 
 
 def register_handlers(app, sub_manager: SubscriptionManager, stats: dict) -> None:
@@ -69,16 +93,28 @@ def register_handlers(app, sub_manager: SubscriptionManager, stats: dict) -> Non
 
     async def subscribe(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         chat_id = update.effective_chat.id
-        is_new  = sub_manager.subscribe(chat_id)
+        chains, display = _parse_chain_arg(ctx.args or [])
+
+        if chains == "invalid":
+            await update.message.reply_html(
+                f"Unknown chain <b>{display}</b>.\n"
+                "Supported: <code>mantle</code>, <code>arbitrum</code>, or leave blank for all.\n"
+                "Example: /subscribe arbitrum"
+            )
+            return
+
+        is_new = sub_manager.subscribe(chat_id)
+        sub_manager.set_chains(chat_id, chains)
+
         if is_new:
             msg = (
-                "✅ <b>Subscribed!</b>\n\n"
-                "You'll receive Mantis Scout signals as they're detected.\n"
+                f"✅ <b>Subscribed!</b> Receiving signals from <b>{display}</b>.\n\n"
                 "Free tier: 3 alerts/day.\n\n"
+                "Use /subscribe mantle or /subscribe arbitrum to filter by chain.\n"
                 "Use /unsubscribe to stop at any time."
             )
         else:
-            msg = "✅ You're already subscribed. Use /unsubscribe to stop."
+            msg = f"✅ Chain filter updated → <b>{display}</b>."
         await update.message.reply_html(msg)
 
     async def unsubscribe(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
@@ -110,7 +146,7 @@ def register_handlers(app, sub_manager: SubscriptionManager, stats: dict) -> Non
             return
 
         signal_id = args[0]
-        explorer  = f"https://explorer.mantle.xyz/address/0xd745Fc0c28B8755b6280232a179e21C50B1D3adf"
+        explorer  = "https://explorer.mantle.xyz/address/0xd745Fc0c28B8755b6280232a179e21C50B1D3adf"
         msg = (
             f"🔐 <b>Signal #{signal_id} audit</b>\n\n"
             f"Every Mantis Scout signal is hashed with keccak256 "

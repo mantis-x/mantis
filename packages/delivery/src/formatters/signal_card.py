@@ -1,5 +1,5 @@
 """
-SignalCard — formats a Signal dict into a Telegram message.
+SignalCard — formats a Signal dict into a Telegram/Discord/LINE message.
 
 Design principles:
 - Plain English first, no crypto jargon in the first line
@@ -15,6 +15,8 @@ PROTOCOL_NAMES = {
     "agni_finance":  "Agni Finance",
     "merchant_moe":  "Merchant Moe",
     "fluxion":       "Fluxion",
+    "uniswap_v3":    "Uniswap V3",
+    "trader_joe":    "Trader Joe",
 }
 
 SIGNAL_EMOJIS = {
@@ -32,6 +34,17 @@ SIGNAL_LABELS = {
     "whale_exit":     "Whale Exit",
     "unusual_volume": "Unusual Volume",
 }
+
+# Per-chain explorer base URLs and display names
+CHAIN_META = {
+    "mantle":   ("https://explorer.mantle.xyz",  "Mantle"),
+    "arbitrum": ("https://arbiscan.io",           "Arbitrum"),
+}
+
+
+def _chain_meta(chain: str) -> tuple[str, str]:
+    """Return (explorer_base, display_name) for a chain slug."""
+    return CHAIN_META.get(chain, (f"https://{chain}.explorer", chain.capitalize()))
 
 
 def confidence_bar(score: int) -> str:
@@ -52,11 +65,9 @@ def format_usd(amount: float) -> str:
 
 
 def format_signal_card(signal: dict, audit_tx_hash: Optional[str] = None) -> str:
-    """
-    Format a signal dict into a Telegram HTML message card.
-    Returns a string ready to send with parse_mode="HTML".
-    """
+    """Format a signal dict into a Telegram HTML message card."""
     signal_type  = signal.get("signal_type", "unusual_volume")
+    chain        = signal.get("chain", "mantle")
     protocol     = signal.get("protocol", "unknown")
     confidence   = int(signal.get("confidence", 0))
     summary      = signal.get("summary", "Unusual on-chain activity detected.")
@@ -70,14 +81,14 @@ def format_signal_card(signal: dict, audit_tx_hash: Optional[str] = None) -> str
     emoji        = SIGNAL_EMOJIS.get(signal_type, "🔍")
     label        = SIGNAL_LABELS.get(signal_type, "Signal")
     proto_name   = PROTOCOL_NAMES.get(protocol, protocol.title())
+    explorer_base, chain_display = _chain_meta(chain)
 
-    # Explorer links
     pool_short   = f"{pool_address[:6]}...{pool_address[-4:]}" if pool_address else "unknown"
-    explorer_url = f"https://explorer.mantle.xyz/address/{pool_address}"
+    explorer_url = f"{explorer_base}/address/{pool_address}"
 
     lines = [
         f"{emoji} <b>Mantis Scout — {label}</b>",
-        f"<i>{proto_name} · Mantle</i>",
+        f"<i>{proto_name} · {chain_display}</i>",
         "",
         f"<b>Signal</b>  {confidence_bar(confidence)}",
         f"<b>Volume</b>  {format_usd(volume_usd)} ({event_type})",
@@ -95,7 +106,6 @@ def format_signal_card(signal: dict, audit_tx_hash: Optional[str] = None) -> str
             lines.append(f"  • {factor}")
         lines.append("")
 
-    # Audit link
     if audit_tx_hash:
         audit_url = f"https://explorer.mantle.xyz/tx/{audit_tx_hash}"
         lines.append(f"🔐 <b>On-chain proof</b>  <a href='{audit_url}'>verify signal</a>")
@@ -110,11 +120,9 @@ def format_signal_card(signal: dict, audit_tx_hash: Optional[str] = None) -> str
 
 
 def format_signal_card_markdown(signal: dict, audit_tx_hash: Optional[str] = None) -> str:
-    """
-    Format a signal dict for platforms that support light Markdown
-    (Discord) — bold via **text**, no HTML tags.
-    """
+    """Format a signal dict for Discord (Markdown bold, no HTML)."""
     signal_type  = signal.get("signal_type", "unusual_volume")
+    chain        = signal.get("chain", "mantle")
     protocol     = signal.get("protocol", "unknown")
     confidence   = int(signal.get("confidence", 0))
     summary      = signal.get("summary", "Unusual on-chain activity detected.")
@@ -128,13 +136,14 @@ def format_signal_card_markdown(signal: dict, audit_tx_hash: Optional[str] = Non
     emoji        = SIGNAL_EMOJIS.get(signal_type, "🔍")
     label        = SIGNAL_LABELS.get(signal_type, "Signal")
     proto_name   = PROTOCOL_NAMES.get(protocol, protocol.title())
+    explorer_base, chain_display = _chain_meta(chain)
 
     pool_short   = f"{pool_address[:6]}...{pool_address[-4:]}" if pool_address else "unknown"
-    explorer_url = f"https://explorer.mantle.xyz/address/{pool_address}"
+    explorer_url = f"{explorer_base}/address/{pool_address}"
 
     lines = [
         f"{emoji} **Mantis Scout — {label}**",
-        f"_{proto_name} · Mantle_",
+        f"_{proto_name} · {chain_display}_",
         "",
         f"**Signal**  {confidence_bar(confidence)}",
         f"**Volume**  {format_usd(volume_usd)} ({event_type})",
@@ -166,11 +175,9 @@ def format_signal_card_markdown(signal: dict, audit_tx_hash: Optional[str] = Non
 
 
 def format_signal_card_plain(signal: dict, audit_tx_hash: Optional[str] = None) -> str:
-    """
-    Format a signal dict as plain text — for platforms with no rich
-    formatting support (LINE Messaging API text messages).
-    """
+    """Format a signal dict as plain text — for LINE Messaging API."""
     signal_type  = signal.get("signal_type", "unusual_volume")
+    chain        = signal.get("chain", "mantle")
     protocol     = signal.get("protocol", "unknown")
     confidence   = int(signal.get("confidence", 0))
     summary      = signal.get("summary", "Unusual on-chain activity detected.")
@@ -184,13 +191,14 @@ def format_signal_card_plain(signal: dict, audit_tx_hash: Optional[str] = None) 
     emoji        = SIGNAL_EMOJIS.get(signal_type, "🔍")
     label        = SIGNAL_LABELS.get(signal_type, "Signal")
     proto_name   = PROTOCOL_NAMES.get(protocol, protocol.title())
+    explorer_base, chain_display = _chain_meta(chain)
 
     pool_short   = f"{pool_address[:6]}...{pool_address[-4:]}" if pool_address else "unknown"
-    explorer_url = f"https://explorer.mantle.xyz/address/{pool_address}"
+    explorer_url = f"{explorer_base}/address/{pool_address}"
 
     lines = [
         f"{emoji} Mantis Scout — {label}",
-        f"{proto_name} · Mantle",
+        f"{proto_name} · {chain_display}",
         "",
         f"Signal  {confidence_bar(confidence)}",
         f"Volume  {format_usd(volume_usd)} ({event_type})",
@@ -247,7 +255,8 @@ def format_history_card(signals: list) -> str:
         proto    = PROTOCOL_NAMES.get(s.get("protocol", ""), "Unknown")
         vol      = format_usd(float(s.get("total_volume_usd", 0)))
         emoji    = SIGNAL_EMOJIS.get(s.get("signal_type", ""), "🔍")
-        lines.append(f"{i}. {emoji} <b>{sig_type}</b> · {proto} · {vol} · {conf}% conf")
+        chain    = s.get("chain", "mantle").capitalize()
+        lines.append(f"{i}. {emoji} <b>{sig_type}</b> · {proto} · {chain} · {vol} · {conf}% conf")
 
     return "\n".join(lines)
 
@@ -278,6 +287,7 @@ def format_history_card_plain(signals: list) -> str:
         proto    = PROTOCOL_NAMES.get(s.get("protocol", ""), "Unknown")
         vol      = format_usd(float(s.get("total_volume_usd", 0)))
         emoji    = SIGNAL_EMOJIS.get(s.get("signal_type", ""), "🔍")
-        lines.append(f"{i}. {emoji} {sig_type} · {proto} · {vol} · {conf}% conf")
+        chain    = s.get("chain", "mantle").capitalize()
+        lines.append(f"{i}. {emoji} {sig_type} · {proto} · {chain} · {vol} · {conf}% conf")
 
     return "\n".join(lines)

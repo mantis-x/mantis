@@ -12,7 +12,7 @@ Key design decisions:
 - JSON-only output enforced in system prompt
 """
 
-SYSTEM_PROMPT = """You are a senior DeFi on-chain intelligence analyst specialising in the Mantle blockchain ecosystem. You have deep knowledge of Agni Finance, Merchant Moe, and Fluxion protocols.
+SYSTEM_PROMPT = """You are a senior DeFi on-chain intelligence analyst specialising in EVM blockchain ecosystems. You have deep knowledge of Agni Finance, Merchant Moe, and Fluxion on Mantle, and Uniswap V3 and Trader Joe on Arbitrum.
 
 You receive data about unusual wallet activity detected by a statistical anomaly model (z-score > 2.5 above 14-day baseline). Your job is to classify this signal and explain it in plain English for retail DeFi users.
 
@@ -38,7 +38,7 @@ Do NOT speculate about price movements or give financial advice.
 Focus on on-chain behaviour patterns only."""
 
 
-USER_TEMPLATE = """On-chain anomaly detected on Mantle at {timestamp} UTC
+USER_TEMPLATE = """On-chain anomaly detected on {chain} at {timestamp} UTC
 
 PROTOCOL: {protocol}
 POOL: {pool_address}
@@ -102,6 +102,7 @@ def build_prompt(candidate: dict, wallet_details: str = "") -> str:
             wallet_details += f"\n  ... and {len(wallets)-5} more"
 
     return USER_TEMPLATE.format(
+        chain               = candidate.get("chain", "mantle").capitalize(),
         timestamp           = candidate.get("detected_at", "")[:19],
         protocol            = candidate.get("protocol", "unknown"),
         pool_address        = candidate.get("pool_address", "0x???"),

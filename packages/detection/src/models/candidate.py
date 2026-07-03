@@ -26,6 +26,7 @@ class ScoredEvent:
     # From ingestion
     block_number:   int
     tx_hash:        str
+    chain:          str
     protocol:       str
     pool_address:   str
     wallet_address: str
@@ -55,6 +56,7 @@ class WalletCluster:
     Clusters are the unit passed to the LLM enricher.
     """
     wallets:          list[str]       # wallet addresses
+    chain:            str
     pool_address:     str
     protocol:         str
     event_type:       str
@@ -106,6 +108,7 @@ class AnomalyCandidate:
     def to_dict(self) -> dict:
         """Serialise for Redis queue."""
         return {
+            "chain":            self.cluster.chain,
             "wallets":          self.cluster.wallets,
             "pool_address":     self.cluster.pool_address,
             "protocol":         self.cluster.protocol,

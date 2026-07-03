@@ -159,11 +159,13 @@ async def dispatch_signals(
                 try:
                     result = audit_logger.log_signal(type("S", (), {
                         "id":           signal.get("id") or 0,
+                        "chain":        signal.get("chain", "mantle"),
                         "confidence":   signal.get("confidence", 0),
                         "deliver_at":   __import__("datetime").datetime.fromisoformat(
                                             signal.get("deliver_at", __import__("datetime").datetime.utcnow().isoformat())
                                         ),
                         "cluster":      type("C", (), {
+                            "chain":        signal.get("chain", "mantle"),
                             "pool_address": signal.get("pool_address", ""),
                             "protocol":     type("P", (), {"value": signal.get("protocol", "")})(),
                         })(),

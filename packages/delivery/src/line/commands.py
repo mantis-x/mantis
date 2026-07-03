@@ -2,10 +2,15 @@
 LINE command handling for Mantis Scout bot.
 
 LINE has no slash-command convention, so users type plain words:
-  subscribe / unsubscribe / status / history / verify <id> / help
+  subscribe [chain] / unsubscribe / status / history / verify <id> / help
 
 Subscribing also happens automatically when a user adds the bot as
 a friend (the "follow" webhook event).
+
+Chain filter examples:
+  subscribe              → all chains
+  subscribe mantle       → Mantle only
+  subscribe arbitrum     → Arbitrum only
 """
 from __future__ import annotations
 
@@ -19,28 +24,36 @@ from src.common.subscription_manager import SubscriptionManager
 
 log = logging.getLogger(__name__)
 
+SUPPORTED_CHAINS = {"mantle", "arbitrum"}
+
 WELCOME_MSG = """Welcome to Mantis Scout!
 
-I monitor Mantle DeFi 24/7 and alert you when smart money moves.
+I monitor Mantle & Arbitrum DeFi 24/7 and alert you when smart money moves.
 
 What I detect:
   - Smart money accumulation
   - Whale entries / exits
   - Unusual volume spikes
 
+Chains: Mantle · Arbitrum (more coming)
 Every signal is hashed on Mantle — fully auditable.
 
-You're now subscribed. Send "help" to see all commands.
+You're now subscribed (all chains). Send "help" to see all commands.
 Free tier: 3 alerts/day · No credit card needed"""
 
 HELP_MSG = """Mantis Scout — Commands
 
-subscribe    Start receiving signals
-unsubscribe  Stop receiving signals
-status       Bot status and stats
-history      Last 5 signals
-verify <id>  Verify a signal on-chain
-help         This message
+subscribe [chain]  Start receiving signals (chain: mantle | arbitrum | all)
+unsubscribe        Stop receiving signals
+status             Bot status and stats
+history            Last 5 signals
+verify <id>        Verify a signal on-chain
+help               This message
+
+Chain filter examples:
+  subscribe              (all chains)
+  subscribe mantle       (Mantle only)
+  subscribe arbitrum     (Arbitrum only)
 
 Free tier: 3 alerts/day
 Pro tier: Unlimited alerts + Execute agent
@@ -48,6 +61,16 @@ Pro tier: Unlimited alerts + Execute agent
 github.com/mantis-x/mantis"""
 
 EXPLORER_CONTRACT = "https://explorer.mantle.xyz/address/0xd745Fc0c28B8755b6280232a179e21C50B1D3adf"
+
+
+def _parse_chain_arg(arg: str) -> tuple:
+    """Returns (chains_set_or_None, display_text, error_or_None)."""
+    arg = arg.strip().lower()
+    if not arg or arg == "all":
+        return None, "all chains", None
+    if arg in SUPPORTED_CHAINS:
+        return {arg}, arg, None
+    return "invalid", arg, f'Unknown chain "{arg}". Supported: mantle, arbitrum, or leave blank for all.'
 
 
 def handle_follow(user_id: str, sub_manager: SubscriptionManager) -> str:
@@ -66,14 +89,21 @@ def handle_text(text: str, user_id: str, sub_manager: SubscriptionManager, stats
     command, _, arg = text.strip().lower().partition(" ")
 
     if command in ("subscribe", "start"):
+        chains, display, error = _parse_chain_arg(arg)
+        if error:
+            return error
+
         is_new = sub_manager.subscribe(user_id)
+        sub_manager.set_chains(user_id, chains)
+
         if is_new:
             return (
-                "Subscribed! You'll receive Mantis Scout signals as they're detected.\n"
+                f"Subscribed! Receiving signals from {display}.\n"
                 "Free tier: 3 alerts/day.\n\n"
+                'Send "subscribe mantle" or "subscribe arbitrum" to filter by chain.\n'
                 'Send "unsubscribe" to stop at any time.'
             )
-        return 'You\'re already subscribed. Send "unsubscribe" to stop.'
+        return f'Chain filter updated → {display}.'
 
     if command == "unsubscribe":
         removed = sub_manager.unsubscribe(user_id)

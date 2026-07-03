@@ -46,25 +46,40 @@ SYNTHETIC_HISTORY = [
 
 def _build_synthetic_history() -> list:
     """
-    Generate 7 days of synthetic baseline data.
-    Agni Finance USDT/WMNT pool averages ~$50K/hour swap volume.
-    This lets the detector score real events immediately.
+    Generate 7 days of synthetic baseline data for all enabled chains.
+
+    Volume estimates:
+      Mantle — Agni Finance USDT/WMNT ~$50K/hour, Merchant Moe ~$20K/hour
+      Arbitrum — Uniswap V3 WETH/USDC ~$3M/hour (100× Mantle scale)
+
+    Separate baselines per chain prevent Arbitrum volume from masking Mantle
+    anomalies and vice versa.
     """
     import random
     random.seed(42)
     now = time.time()
     history = []
+
+    # (chain, pool_address, mean_usd/hr, std_usd/hr)
     pools = [
-        ("0xcda86a272531e8640cd7f1a92c01839911b90bb0", "agni_finance", 50_000, 15_000),
-        ("0xe6829d9a7ee3040e1276fa75293bde931859e8fa", "agni_finance", 30_000, 10_000),
-        ("0x8e4bcaabb5df13c2c6d8fd44c7e0a5fc9c41e14d", "merchant_moe", 20_000,  8_000),
+        # Mantle pools
+        ("mantle", "0xcda86a272531e8640cd7f1a92c01839911b90bb0", 50_000,  15_000),
+        ("mantle", "0xe6829d9a7ee3040e1276fa75293bde931859e8fa", 30_000,  10_000),
+        ("mantle", "0x8e4bcaabb5df13c2c6d8fd44c7e0a5fc9c41e14d", 20_000,   8_000),
+        # Arbitrum Uniswap V3 pools — order-of-magnitude higher volume
+        ("arbitrum", "0xc6962004f452be9203591991d15f6b388e09e8d0", 3_000_000, 800_000),
+        ("arbitrum", "0xc473e2aee3441bf9240be85eb122abb059a3b57c", 1_500_000, 400_000),
+        ("arbitrum", "0x641c00a822e8b671738d32a431a4fb6074e5c79d",   800_000, 250_000),
+        ("arbitrum", "0x2f5e87c9312fa29aed5c179e456625d79015299c",   400_000, 150_000),
     ]
-    for pool, protocol, mean_usd, std_usd in pools:
-        for hour in range(7 * 24):  # 7 days
+
+    for chain, pool, mean_usd, std_usd in pools:
+        for hour in range(7 * 24):
             ts = now - (7 * 24 * 3600) + (hour * 3600)
             for etype in ("swap", "mint"):
                 vol = max(0, random.gauss(mean_usd, std_usd))
                 history.append({
+                    "chain":        chain,
                     "pool_address": pool,
                     "event_type":   etype,
                     "amount_usd":   vol,
@@ -128,8 +143,6 @@ class Detector:
         if scored is None:
             return
 
-        # Single-event cluster for now
-        # Full multi-event clustering runs on batches (see batch_detect)
         cluster = self._clusterer._solo_cluster(scored)
         candidate = AnomalyCandidate(
             cluster    = cluster,
@@ -154,6 +167,7 @@ class Detector:
 class _DictEvent:
     """Minimal event wrapper around a raw dict from Redis."""
     def __init__(self, d: dict):
+        self.chain          = d.get("chain", "mantle")   # default for pre-refactor payloads
         self.block_number   = d.get("block", 0)
         self.tx_hash        = d.get("tx_full", d.get("tx", ""))
         self.protocol       = _Val(d.get("protocol", ""))

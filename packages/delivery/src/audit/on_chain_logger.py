@@ -192,8 +192,13 @@ class OnChainLogger:
         Build the canonical JSON string with alphabetically sorted keys.
         This MUST match what's passed to verify() — any deviation breaks
         hash verification.
+        "chain" sorts before "confidence" alphabetically.
         """
+        chain = getattr(signal, "chain", None) or getattr(
+            signal.cluster, "chain", "mantle"
+        )
         return json.dumps({
+            "chain":       chain,
             "confidence":  int(signal.confidence),
             "deliver_at":  signal.deliver_at.isoformat(),
             "id":          int(signal.id),

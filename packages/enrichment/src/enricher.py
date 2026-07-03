@@ -72,6 +72,7 @@ class Enricher:
 
         signal = Signal(
             id              = None,
+            chain           = candidate.get("chain", "mantle"),
             protocol        = candidate.get("protocol", "unknown"),
             pool_address    = candidate.get("pool_address", ""),
             wallets         = candidate.get("wallets", []),

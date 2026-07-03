@@ -26,6 +26,7 @@ class Subscription:
     min_confidence: int             = 60
     signal_types:   Optional[set]   = None   # None = all types
     protocols:      Optional[set]   = None   # None = all protocols
+    chains:         Optional[set]   = None   # None = all chains (mantle, arbitrum, …)
     is_pro:         bool            = False
     joined_at:      datetime        = field(
         default_factory=lambda: datetime.now(tz=timezone.utc)
@@ -44,6 +45,9 @@ class Subscription:
             return False
         # Protocol filter
         if self.protocols and signal.get("protocol") not in self.protocols:
+            return False
+        # Chain filter
+        if self.chains and signal.get("chain", "mantle") not in self.chains:
             return False
         # Daily cap (free tier)
         if not self.is_pro:
@@ -75,6 +79,15 @@ class SubscriptionManager:
             return False
         self._subs[chat_id] = Subscription(chat_id=chat_id)
         log.info("New subscriber: chat_id=%d total=%d", chat_id, len(self._subs))
+        return True
+
+    def set_chains(self, chat_id: int, chains: Optional[set]) -> bool:
+        """Set chain filter for a subscriber. None = all chains. Returns False if not subscribed."""
+        sub = self._subs.get(chat_id)
+        if sub is None:
+            return False
+        sub.chains = chains
+        log.info("Chain filter set: chat_id=%d chains=%s", chat_id, chains)
         return True
 
     def unsubscribe(self, chat_id: int) -> bool:
