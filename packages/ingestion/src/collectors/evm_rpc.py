@@ -109,7 +109,6 @@ class ChainCollector:
                 "fromBlock": from_block,
                 "toBlock":   to_block,
                 "address":   [Web3.to_checksum_address(a) for a in addresses],
-                "topics":    [ALL_TOPICS],
             })
         except Exception as exc:
             log.warning(
