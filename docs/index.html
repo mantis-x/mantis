@@ -1054,8 +1054,8 @@
 
     <div class="proof-grid">
       <div class="proof-card">
-        <div class="proof-card-label">Confirmed Transaction · AgentIdentity.sol</div>
-        <div class="proof-card-title">First Execute — On-Chain</div>
+        <div class="proof-card-label">Confirmed Transaction · AgentIdentity.sol · Mantle Sepolia</div>
+        <div class="proof-card-title">First Execute — On-Chain (Mantle)</div>
         <div class="proof-card-desc">
           Mantis Execute called AgentIdentity.sol on Mantle Sepolia, logging the agent's first autonomous decision to its ERC-8004 reputation ledger. The transaction is immutable and publicly verifiable.
         </div>
@@ -1064,6 +1064,31 @@
           <span class="proof-tx-arrow">↗ View on Explorer</span>
         </a>
         <div class="proof-badge">Confirmed · Mantle Sepolia</div>
+      </div>
+
+      <div class="proof-card">
+        <div class="proof-card-label">Confirmed Transactions · AgentIdentity.sol · Arbitrum Sepolia</div>
+        <div class="proof-card-title">First Execute — On-Chain (Arbitrum)</div>
+        <div class="proof-card-desc">
+          Mantis Execute minted an ERC-8004 agent identity on Arbitrum Sepolia and logged two decisions: a successful Uniswap V3 swap (confidence 88, z=3.4σ) and a safety-guard abort (slippage 2.7% exceeded 2.0% cap). All three transactions are permanently on-chain.
+        </div>
+        <a class="proof-tx" href="https://sepolia.arbiscan.io/tx/0xce21a24aba75682d73ef1b6ad5179e5b5b2a6a6960d5cad44a2af971376e61b8" target="_blank" rel="noopener">
+          <span>0xce21a24a… · mintAgent "Mantis Execute · Arbitrum"</span>
+          <span class="proof-tx-arrow">↗ Arbiscan</span>
+        </a>
+        <div style="margin-top:0.5rem">
+          <a class="proof-tx" href="https://sepolia.arbiscan.io/tx/0xacbd8f99c931855cba301825b367c200eeb3b442c17485cf0dd4a324c013191b" target="_blank" rel="noopener">
+            <span>0xacbd8f99… · logDecision swap · WETH/USDC · confidence=88 ✓</span>
+            <span class="proof-tx-arrow">↗ Arbiscan</span>
+          </a>
+        </div>
+        <div style="margin-top:0.5rem">
+          <a class="proof-tx" href="https://sepolia.arbiscan.io/tx/0x92d0fac912003510c7ef60ededa3b4afcae5d6441956d14a6ee7ad174890675b" target="_blank" rel="noopener">
+            <span>0x92d0fac9… · logDecision abort · slippage guard triggered ✗</span>
+            <span class="proof-tx-arrow">↗ Arbiscan</span>
+          </a>
+        </div>
+        <div class="proof-badge">Confirmed · Arbitrum Sepolia</div>
       </div>
 
       <div class="proof-card">
