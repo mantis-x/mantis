@@ -40,6 +40,9 @@ class ExecutionRequest:
     input_token:    Optional[str] = None
     output_token:   Optional[str] = None
 
+    # Chain this execution runs on
+    chain:          str = "mantle"
+
     created_at: datetime = None
 
     def __post_init__(self):

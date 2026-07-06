@@ -106,4 +106,5 @@ class RuleEngine:
             amount_usd   = amount_usd,
             max_slippage = float(rules.get("max_slippage", 0.02)),
             max_position = float(rules.get("max_position_pct", 5.0)),
+            chain        = signal.get("chain", "mantle"),
         )

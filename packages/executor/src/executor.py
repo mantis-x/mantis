@@ -16,13 +16,14 @@ from __future__ import annotations
 import logging
 import os
 
-from src.intent.rule_engine       import RuleEngine
-from src.guards.guard_runner      import GuardRunner
-from src.byreal.cli_runner        import ByrealCLIRunner, ByrealCLIError
-from src.identity.erc8004_logger  import ERC8004Logger
-from src.identity.agent_registry  import AgentRegistry
-from src.models.execution_request import ExecutionRequest, ActionType
-from src.models.execution_result  import ExecutionResult, ResultStatus
+from src.intent.rule_engine           import RuleEngine
+from src.guards.guard_runner          import GuardRunner
+from src.byreal.cli_runner            import ByrealCLIRunner, ByrealCLIError
+from src.identity.erc8004_logger      import ERC8004Logger
+from src.identity.agent_registry      import AgentRegistry
+from src.models.execution_request     import ExecutionRequest, ActionType
+from src.models.execution_result      import ExecutionResult, ResultStatus
+from src.arbitrum.swap_executor       import ArbitrumSwapExecutor
 
 log = logging.getLogger(__name__)
 
@@ -37,16 +38,18 @@ class Executor:
     """
 
     def __init__(self):
-        self.registry  = AgentRegistry()
-        self.rule_eng  = RuleEngine()
-        self.guards    = GuardRunner()
-        self.byreal    = ByrealCLIRunner(dry_run=DRY_RUN)
-        self.identity  = ERC8004Logger()
+        self.registry     = AgentRegistry()
+        self.rule_eng     = RuleEngine()
+        self.guards       = GuardRunner()
+        self.byreal       = ByrealCLIRunner(dry_run=DRY_RUN)
+        self.arb_executor = ArbitrumSwapExecutor(dry_run=DRY_RUN)
+        self.identity     = ERC8004Logger()
 
         log.info(
-            "Executor ready — %d agents, byreal=%s, dry_run=%s",
+            "Executor ready — %d agents, byreal=%s, arb=%s, dry_run=%s",
             self.registry.count(),
             "available" if self.byreal.is_available() else "mock",
+            "ready" if self.arb_executor.is_ready() else "stub",
             DRY_RUN,
         )
 
@@ -144,16 +147,29 @@ class Executor:
             return ExecutionResult.aborted(request, reason=f"Unexpected: {exc}")
 
     def _do_swap(self, request: ExecutionRequest) -> dict:
-        """Execute a token swap via Byreal."""
-        # Default to WMNT → USDT swap on Mantle
+        """Execute a token swap — routes to Arbitrum or Mantle based on request.chain."""
+        if request.chain == "arbitrum":
+            # Arbitrum: Uniswap V3 via ArbitrumSwapExecutor
+            token_in  = request.input_token  or "0xFF970A61A04b1cA14834A43f5dE4533eBDDB5CC8"  # USDC.e
+            token_out = request.output_token or "0x82aF49447D8a07e3bd95BD0d56f35241523fBab1"  # WETH
+            log.info(
+                "Arbitrum swap: $%.0f %s → %s dry_run=%s",
+                request.amount_usd, token_in[:10], token_out[:10], DRY_RUN,
+            )
+            return self.arb_executor.swap(
+                token_in   = token_in,
+                token_out  = token_out,
+                amount_usd = request.amount_usd,
+                slippage   = request.max_slippage,
+            )
+
+        # Mantle: Byreal CLI
         input_mint  = request.input_token  or "0x78c1b0C915c4FAA5FffA6CAbf0219DA63d7f4cb8"  # WMNT
         output_mint = request.output_token or "0x201EBa5CC46D216Ce6DC03F6a759e8E766e956aE"  # USDT
-
         log.info(
             "Byreal swap: $%.0f %s → %s dry_run=%s",
             request.amount_usd, input_mint[:8], output_mint[:8], DRY_RUN,
         )
-
         return self.byreal.swap_execute(
             input_mint  = input_mint,
             output_mint = output_mint,
