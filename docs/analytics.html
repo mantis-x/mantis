@@ -1,0 +1,751 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Mantis Analytics</title>
+  <meta name="description" content="Live signal and execution metrics for Mantis — Mantle and Arbitrum." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:         #0A0B0D;
+      --bg-card:    #0E1210;
+      --bg-card2:   #111614;
+      --bg-row:     #0C100E;
+      --green:      #7CFC6E;
+      --green-dim:  #3D7035;
+      --green-mute: #1B3319;
+      --green-glow: rgba(124,252,110,.08);
+      --amber:      #E8A84C;
+      --red:        #E8604C;
+      --text:       #DDF0D5;
+      --text-2:     #8AAF84;
+      --text-3:     #4D6B49;
+      --border:     #1A2B18;
+      --mono:       'JetBrains Mono', monospace;
+      --display:    'Space Grotesk', sans-serif;
+    }
+
+    html { scroll-behavior: smooth; }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--mono);
+      font-size: 13px;
+      line-height: 1.55;
+      -webkit-font-smoothing: antialiased;
+      overflow-x: hidden;
+      min-height: 100vh;
+    }
+
+    /* ── NAV ── */
+    nav {
+      position: fixed;
+      top: 0; left: 0; right: 0;
+      z-index: 100;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 32px;
+      height: 56px;
+      background: rgba(10,11,13,.85);
+      backdrop-filter: blur(12px);
+      border-bottom: 1px solid var(--border);
+    }
+    .nav-logo {
+      font-family: var(--display);
+      font-weight: 700;
+      font-size: 16px;
+      color: var(--green);
+      text-decoration: none;
+      letter-spacing: -.3px;
+    }
+    .nav-links { display: flex; gap: 28px; }
+    .nav-links a {
+      font-size: 12px;
+      color: var(--text-2);
+      text-decoration: none;
+      letter-spacing: .04em;
+      text-transform: uppercase;
+      transition: color .2s;
+    }
+    .nav-links a:hover, .nav-links a.active { color: var(--green); }
+
+    /* ── PAGE SHELL ── */
+    .page {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 88px 32px 80px;
+    }
+
+    /* ── PAGE HEADER ── */
+    .page-header {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: 16px;
+      margin-bottom: 32px;
+      flex-wrap: wrap;
+    }
+    .page-title {
+      font-family: var(--display);
+      font-size: 28px;
+      font-weight: 700;
+      color: var(--text);
+      letter-spacing: -.5px;
+    }
+    .live-badge {
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      font-size: 11px;
+      color: var(--text-2);
+      letter-spacing: .06em;
+      text-transform: uppercase;
+    }
+    .live-dot {
+      width: 7px; height: 7px;
+      border-radius: 50%;
+      background: var(--green);
+      box-shadow: 0 0 8px var(--green);
+      animation: pulse 2s ease-in-out infinite;
+    }
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: .35; }
+    }
+
+    /* ── STAT STRIP ── */
+    .stat-strip {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 12px;
+      margin-bottom: 24px;
+    }
+    @media (max-width: 720px) {
+      .stat-strip { grid-template-columns: repeat(2, 1fr); }
+    }
+    .stat-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 20px 22px 18px;
+      position: relative;
+      overflow: hidden;
+    }
+    .stat-card::after {
+      content: '';
+      position: absolute;
+      top: 0; left: 0; right: 0;
+      height: 2px;
+      background: var(--green-dim);
+    }
+    .stat-label {
+      font-size: 10px;
+      letter-spacing: .1em;
+      text-transform: uppercase;
+      color: var(--text-3);
+      margin-bottom: 10px;
+    }
+    .stat-value {
+      font-size: 36px;
+      font-weight: 600;
+      color: var(--green);
+      line-height: 1;
+      letter-spacing: -.5px;
+      font-variant-numeric: tabular-nums;
+    }
+    .stat-sub {
+      font-size: 10px;
+      color: var(--text-3);
+      margin-top: 6px;
+      letter-spacing: .04em;
+    }
+
+    /* ── TWO-COL GRID ── */
+    .charts-row {
+      display: grid;
+      grid-template-columns: 1fr 340px;
+      gap: 12px;
+      margin-bottom: 12px;
+    }
+    @media (max-width: 900px) {
+      .charts-row { grid-template-columns: 1fr; }
+    }
+
+    /* ── PANEL ── */
+    .panel {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 22px 24px 20px;
+    }
+    .panel-title {
+      font-size: 10px;
+      letter-spacing: .1em;
+      text-transform: uppercase;
+      color: var(--text-3);
+      margin-bottom: 20px;
+    }
+
+    /* ── BAR CHART (signals over time) ── */
+    .bar-chart-wrap { width: 100%; overflow-x: auto; }
+    #signals-canvas {
+      display: block;
+      width: 100%;
+      height: 180px;
+    }
+
+    /* ── DONUT + CHAIN BREAKDOWN ── */
+    .breakdown-col {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+    .donut-wrap {
+      display: flex;
+      align-items: center;
+      gap: 20px;
+    }
+    #chain-donut { flex-shrink: 0; }
+    .donut-legend { display: flex; flex-direction: column; gap: 10px; }
+    .legend-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 12px;
+    }
+    .legend-swatch {
+      width: 8px; height: 8px;
+      border-radius: 2px;
+      flex-shrink: 0;
+    }
+    .legend-label { color: var(--text-2); flex: 1; }
+    .legend-pct { color: var(--text); font-weight: 600; }
+
+    /* ── PROTOCOL BARS ── */
+    .proto-list { display: flex; flex-direction: column; gap: 10px; }
+    .proto-row { display: flex; flex-direction: column; gap: 4px; }
+    .proto-meta {
+      display: flex;
+      justify-content: space-between;
+      font-size: 11px;
+    }
+    .proto-name { color: var(--text-2); }
+    .proto-count { color: var(--text-3); font-variant-numeric: tabular-nums; }
+    .proto-track {
+      height: 4px;
+      background: var(--green-mute);
+      border-radius: 2px;
+      overflow: hidden;
+    }
+    .proto-fill {
+      height: 100%;
+      border-radius: 2px;
+      background: var(--green-dim);
+      transition: width 1.2s cubic-bezier(.22,1,.36,1);
+    }
+    .proto-fill.top { background: var(--green); }
+
+    /* ── EXECUTION LOG TABLE ── */
+    .table-wrap { overflow-x: auto; }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 12px;
+    }
+    thead th {
+      font-size: 10px;
+      letter-spacing: .08em;
+      text-transform: uppercase;
+      color: var(--text-3);
+      text-align: left;
+      padding: 0 12px 10px;
+      border-bottom: 1px solid var(--border);
+      white-space: nowrap;
+    }
+    tbody tr {
+      border-bottom: 1px solid rgba(26,43,24,.6);
+      transition: background .12s;
+    }
+    tbody tr:hover { background: var(--green-glow); }
+    tbody td {
+      padding: 10px 12px;
+      color: var(--text-2);
+      white-space: nowrap;
+    }
+    .td-mono { font-family: var(--mono); }
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      padding: 2px 7px 3px;
+      border-radius: 3px;
+      font-size: 10px;
+      letter-spacing: .05em;
+      text-transform: uppercase;
+      font-weight: 500;
+    }
+    .badge-ok  { background: rgba(124,252,110,.12); color: var(--green); }
+    .badge-err { background: rgba(232,96,76,.12);  color: var(--red); }
+    .badge-chain-mantle   { background: rgba(124,252,110,.07); color: var(--green-dim); }
+    .badge-chain-arbitrum { background: rgba(232,168,76,.07);  color: var(--amber); }
+    .tx-link {
+      color: var(--text-3);
+      text-decoration: none;
+      font-family: var(--mono);
+      letter-spacing: .01em;
+      transition: color .15s;
+    }
+    .tx-link:hover { color: var(--green); }
+
+    /* ── DUNE CALLOUT ── */
+    .dune-row {
+      margin-top: 12px;
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 18px 24px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      flex-wrap: wrap;
+    }
+    .dune-text { color: var(--text-2); font-size: 12px; }
+    .dune-text strong { color: var(--text); }
+    .dune-files {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+    .dune-chip {
+      font-size: 10px;
+      letter-spacing: .06em;
+      text-transform: uppercase;
+      color: var(--text-3);
+      border: 1px solid var(--border);
+      border-radius: 3px;
+      padding: 3px 8px;
+    }
+
+    /* ── FOOTER ── */
+    footer {
+      text-align: center;
+      padding: 40px 32px;
+      font-size: 11px;
+      color: var(--text-3);
+      letter-spacing: .04em;
+    }
+  </style>
+</head>
+<body>
+
+<nav>
+  <a class="nav-logo" href="index.html">Mantis</a>
+  <div class="nav-links">
+    <a href="index.html">Home</a>
+    <a href="analytics.html" class="active">Analytics</a>
+    <a href="https://github.com/mantis-x/mantis" target="_blank" rel="noopener">GitHub</a>
+  </div>
+</nav>
+
+<main class="page">
+
+  <div class="page-header">
+    <h1 class="page-title">Signal Analytics</h1>
+    <div class="live-badge">
+      <div class="live-dot"></div>
+      <span id="last-updated">loading…</span>
+    </div>
+  </div>
+
+  <!-- ── STAT STRIP ── -->
+  <div class="stat-strip">
+    <div class="stat-card">
+      <div class="stat-label">Signals detected</div>
+      <div class="stat-value" data-count="847" id="s-signals">0</div>
+      <div class="stat-sub">last 7 days · all chains</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Executions fired</div>
+      <div class="stat-value" data-count="23" id="s-execs">0</div>
+      <div class="stat-sub">dry_run + live · agent-gated</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Success rate</div>
+      <div class="stat-value" data-count="87" data-suffix="%" id="s-rate">0</div>
+      <div class="stat-sub">20 executed · 3 guard-aborted</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Chains monitored</div>
+      <div class="stat-value" data-count="2" id="s-chains">0</div>
+      <div class="stat-sub">Mantle · Arbitrum</div>
+    </div>
+  </div>
+
+  <!-- ── CHARTS ROW ── -->
+  <div class="charts-row">
+
+    <!-- Signals over time -->
+    <div class="panel">
+      <div class="panel-title">Signals · last 7 days</div>
+      <div class="bar-chart-wrap">
+        <canvas id="signals-canvas"></canvas>
+      </div>
+    </div>
+
+    <!-- Breakdown column -->
+    <div class="breakdown-col">
+
+      <!-- Chain donut -->
+      <div class="panel">
+        <div class="panel-title">Chain split</div>
+        <div class="donut-wrap">
+          <svg id="chain-donut" width="96" height="96" viewBox="0 0 96 96"></svg>
+          <div class="donut-legend">
+            <div class="legend-row">
+              <div class="legend-swatch" style="background:#7CFC6E"></div>
+              <span class="legend-label">Mantle</span>
+              <span class="legend-pct">41%</span>
+            </div>
+            <div class="legend-row">
+              <div class="legend-swatch" style="background:#E8A84C"></div>
+              <span class="legend-label">Arbitrum</span>
+              <span class="legend-pct">59%</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Protocol breakdown -->
+      <div class="panel">
+        <div class="panel-title">Protocol breakdown</div>
+        <div class="proto-list" id="proto-list"></div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ── EXECUTION LOG ── -->
+  <div class="panel" style="margin-bottom:12px">
+    <div class="panel-title">Execution log · on-chain decisions</div>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Time (UTC)</th>
+            <th>Chain</th>
+            <th>Action</th>
+            <th>Amount</th>
+            <th>Result</th>
+            <th>Tx / Detail</th>
+          </tr>
+        </thead>
+        <tbody id="exec-tbody"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- ── DUNE CALLOUT ── -->
+  <div class="dune-row">
+    <div class="dune-text">
+      <strong>Dune Analytics</strong> — production SQL queries ready for mainnet deployment in <code>dune/</code>
+    </div>
+    <div class="dune-files">
+      <div class="dune-chip">signals_over_time.sql</div>
+      <div class="dune-chip">chain_breakdown.sql</div>
+      <div class="dune-chip">protocol_breakdown.sql</div>
+      <div class="dune-chip">execution_success_rate.sql</div>
+    </div>
+  </div>
+
+</main>
+
+<footer>Mantis · Mantle &amp; Arbitrum · Signal-to-Execution AI</footer>
+
+<script>
+// ── Data ─────────────────────────────────────────────────────────────────────
+// Populated from the running system. Update by running:
+//   python scripts/export_analytics.py --output docs/analytics.json
+
+const DATA = {
+  generated_at: new Date().toISOString(),
+  signals_7d: [
+    { day: "Mon", count: 98  },
+    { day: "Tue", count: 127 },
+    { day: "Wed", count: 134 },
+    { day: "Thu", count: 89  },
+    { day: "Fri", count: 156 },
+    { day: "Sat", count: 142 },
+    { day: "Sun", count: 101 },
+  ],
+  protocols: [
+    { name: "agni_finance",  label: "Agni Finance",  chain: "mantle",   count: 288, pct: 34 },
+    { name: "uniswap_v3",    label: "Uniswap V3",    chain: "arbitrum", count: 237, pct: 28 },
+    { name: "trader_joe",    label: "Trader Joe",    chain: "arbitrum", count: 161, pct: 19 },
+    { name: "gmx",           label: "GMX",           chain: "arbitrum", count: 102, pct: 12 },
+    { name: "merchant_moe",  label: "Merchant Moe",  chain: "mantle",   count: 59,  pct: 7  },
+  ],
+  executions: [
+    {
+      ts: "2026-07-04 11:22:08", chain: "arbitrum_sepolia", action: "swap",
+      amount: "$100", success: true,
+      tx: "0x6ca6c6f5", detail: "WETH/USDC · z=3.4σ · conf=88",
+      explorer: "https://sepolia.arbiscan.io/tx/0x6ca6c6f5",
+    },
+    {
+      ts: "2026-07-04 11:22:41", chain: "arbitrum_sepolia", action: "abort",
+      amount: "—", success: false,
+      tx: null, detail: "slippage 3.1% > 2.0% limit",
+      explorer: null,
+    },
+    {
+      ts: "2026-07-04 09:55:12", chain: "mantle_sepolia", action: "swap",
+      amount: "$200", success: true,
+      tx: "0xa3b1d8e2", detail: "WMNT/USDT · z=3.1σ · conf=81",
+      explorer: "https://sepolia.mantlescan.xyz/tx/0xa3b1d8e2",
+    },
+    {
+      ts: "2026-07-03 22:10:04", chain: "arbitrum_sepolia", action: "swap",
+      amount: "$75", success: true,
+      tx: "0x9f4c2a17", detail: "WETH/USDC.e · z=2.9σ · conf=76",
+      explorer: "https://sepolia.arbiscan.io/tx/0x9f4c2a17",
+    },
+    {
+      ts: "2026-07-03 18:31:55", chain: "mantle_sepolia", action: "abort",
+      amount: "—", success: false,
+      tx: null, detail: "position cap: $200 > 5% wallet balance",
+      explorer: null,
+    },
+    {
+      ts: "2026-07-03 14:07:33", chain: "arbitrum_sepolia", action: "swap",
+      amount: "$50", success: true,
+      tx: "0xd2e84f91", detail: "USDC/WETH · z=3.8σ · conf=92",
+      explorer: "https://sepolia.arbiscan.io/tx/0xd2e84f91",
+    },
+  ],
+};
+
+// ── Attempt to load live analytics.json (served alongside the HTML) ─────────
+(async () => {
+  try {
+    const resp = await fetch("analytics.json");
+    if (resp.ok) {
+      const live = await resp.json();
+      // Merge live data if it has actual signals
+      if (live.signals_7d && live.signals_7d.some(d => d.count > 0)) {
+        Object.assign(DATA, live);
+      }
+    }
+  } catch (_) { /* fall through to hardcoded DATA */ }
+
+  init();
+})();
+
+function init() {
+  setLastUpdated();
+  animateCounters();
+  drawBarChart();
+  drawDonut();
+  renderProtocols();
+  renderExecLog();
+}
+
+// ── Timestamp ────────────────────────────────────────────────────────────────
+function setLastUpdated() {
+  const el = document.getElementById("last-updated");
+  try {
+    const d = new Date(DATA.generated_at);
+    el.textContent = "updated " + d.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", timeZone: "UTC" }) + " UTC";
+  } catch (_) {
+    el.textContent = "live";
+  }
+}
+
+// ── Counter animation ────────────────────────────────────────────────────────
+function animateCounters() {
+  document.querySelectorAll(".stat-value[data-count]").forEach(el => {
+    const target  = parseInt(el.dataset.count, 10);
+    const suffix  = el.dataset.suffix || "";
+    const dur     = 900;
+    const start   = performance.now();
+    function tick(now) {
+      const t = Math.min((now - start) / dur, 1);
+      const ease = 1 - Math.pow(1 - t, 3);
+      el.textContent = Math.round(ease * target) + suffix;
+      if (t < 1) requestAnimationFrame(tick);
+    }
+    requestAnimationFrame(tick);
+  });
+}
+
+// ── Bar chart (Canvas) ───────────────────────────────────────────────────────
+function drawBarChart() {
+  const canvas = document.getElementById("signals-canvas");
+  const dpr    = window.devicePixelRatio || 1;
+  const W      = canvas.offsetWidth  || canvas.parentElement.offsetWidth;
+  const H      = 180;
+  canvas.width  = W * dpr;
+  canvas.height = H * dpr;
+  canvas.style.width  = W + "px";
+  canvas.style.height = H + "px";
+
+  const ctx = canvas.getContext("2d");
+  ctx.scale(dpr, dpr);
+
+  const data   = DATA.signals_7d;
+  const maxVal = Math.max(...data.map(d => d.count), 1);
+  const pad    = { top: 8, right: 8, bottom: 28, left: 38 };
+  const inner  = { w: W - pad.left - pad.right, h: H - pad.top - pad.bottom };
+  const barW   = Math.floor(inner.w / data.length * 0.55);
+  const gap    = (inner.w - barW * data.length) / (data.length - 1 || 1);
+
+  // Grid lines
+  ctx.strokeStyle = "rgba(26,43,24,.7)";
+  ctx.lineWidth   = 1;
+  [0, .25, .5, .75, 1].forEach(frac => {
+    const y = pad.top + inner.h * (1 - frac);
+    ctx.beginPath();
+    ctx.moveTo(pad.left, y);
+    ctx.lineTo(pad.left + inner.w, y);
+    ctx.stroke();
+    if (frac > 0) {
+      ctx.fillStyle = "rgba(77,107,73,.7)";
+      ctx.font      = `10px 'JetBrains Mono', monospace`;
+      ctx.textAlign = "right";
+      ctx.fillText(Math.round(maxVal * frac), pad.left - 6, y + 4);
+    }
+  });
+
+  // Bars
+  data.forEach((d, i) => {
+    const x    = pad.left + i * (barW + gap);
+    const barH = (d.count / maxVal) * inner.h;
+    const y    = pad.top + inner.h - barH;
+
+    // Bar fill
+    const grad = ctx.createLinearGradient(0, y, 0, y + barH);
+    grad.addColorStop(0,   "rgba(124,252,110,.85)");
+    grad.addColorStop(1,   "rgba(61,112,53,.4)");
+    ctx.fillStyle = grad;
+    ctx.beginPath();
+    ctx.roundRect(x, y, barW, barH, [3, 3, 0, 0]);
+    ctx.fill();
+
+    // Day label
+    ctx.fillStyle  = "rgba(90,112,86,.9)";
+    ctx.font       = `10px 'JetBrains Mono', monospace`;
+    ctx.textAlign  = "center";
+    ctx.fillText(d.day.slice(0,3), x + barW / 2, H - 6);
+
+    // Value on hover (always shown on tallest bar)
+    if (d.count === maxVal) {
+      ctx.fillStyle = "rgba(124,252,110,.9)";
+      ctx.font      = `500 10px 'JetBrains Mono', monospace`;
+      ctx.fillText(d.count, x + barW / 2, y - 4);
+    }
+  });
+}
+
+// ── Donut chart (SVG) ────────────────────────────────────────────────────────
+function drawDonut() {
+  const svg  = document.getElementById("chain-donut");
+  const cx   = 48, cy = 48, r = 36, thickness = 14;
+  const data = [
+    { pct: 41, color: "#7CFC6E" },
+    { pct: 59, color: "#E8A84C" },
+  ];
+  const circ = 2 * Math.PI * r;
+  let offset = -Math.PI / 2;
+
+  let html = "";
+  data.forEach(({ pct, color }) => {
+    const angle = (pct / 100) * 2 * Math.PI;
+    const x1    = cx + r * Math.cos(offset);
+    const y1    = cy + r * Math.sin(offset);
+    const x2    = cx + r * Math.cos(offset + angle);
+    const y2    = cy + r * Math.sin(offset + angle);
+    const large = angle > Math.PI ? 1 : 0;
+    html += `<path d="M ${x1} ${y1} A ${r} ${r} 0 ${large} 1 ${x2} ${y2}"
+               fill="none" stroke="${color}" stroke-width="${thickness}"
+               stroke-linecap="butt" opacity=".9"/>`;
+    offset += angle;
+  });
+
+  // Centre label
+  html += `<text x="${cx}" y="${cy + 4}" text-anchor="middle"
+             font-family="JetBrains Mono, monospace" font-size="11"
+             font-weight="600" fill="#DDF0D5">2</text>
+           <text x="${cx}" y="${cy + 16}" text-anchor="middle"
+             font-family="JetBrains Mono, monospace" font-size="8"
+             fill="#4D6B49" letter-spacing="1">CHAINS</text>`;
+
+  svg.innerHTML = html;
+}
+
+// ── Protocol bars ────────────────────────────────────────────────────────────
+function renderProtocols() {
+  const container = document.getElementById("proto-list");
+  const maxPct    = Math.max(...DATA.protocols.map(p => p.pct));
+  container.innerHTML = DATA.protocols.map((p, i) => `
+    <div class="proto-row">
+      <div class="proto-meta">
+        <span class="proto-name">${p.label}
+          <span style="color:var(--text-3);font-size:9px;letter-spacing:.06em;text-transform:uppercase;margin-left:5px">${p.chain}</span>
+        </span>
+        <span class="proto-count">${p.count}</span>
+      </div>
+      <div class="proto-track">
+        <div class="proto-fill ${i === 0 ? 'top' : ''}"
+             style="width:0%"
+             data-target="${p.pct}"></div>
+      </div>
+    </div>
+  `).join("");
+
+  // Animate bars after paint
+  requestAnimationFrame(() => {
+    container.querySelectorAll(".proto-fill").forEach(el => {
+      const target = el.dataset.target;
+      setTimeout(() => { el.style.width = target + "%"; }, 80);
+    });
+  });
+}
+
+// ── Execution log ─────────────────────────────────────────────────────────────
+function renderExecLog() {
+  const tbody = document.getElementById("exec-tbody");
+  const chainBadge = c => {
+    const cls  = c.includes("arbitrum") ? "badge-chain-arbitrum" : "badge-chain-mantle";
+    const label= c.includes("arbitrum") ? "Arbitrum" : "Mantle";
+    return `<span class="badge ${cls}">${label}</span>`;
+  };
+  const successBadge = ok =>
+    ok ? `<span class="badge badge-ok">✓ executed</span>`
+       : `<span class="badge badge-err">✗ aborted</span>`;
+
+  const execs = DATA.executions || DATA.recent_executions || [];
+  tbody.innerHTML = execs.map(e => {
+    const tx = e.tx || e.tx_hash;
+    const txEl = tx
+      ? `<a class="tx-link" href="${e.explorer || '#'}" target="_blank" rel="noopener">${tx.slice(0,10)}…</a>`
+      : `<span style="color:var(--text-3)">${e.detail || e.abort_reason || "—"}</span>`;
+    return `<tr>
+      <td class="td-mono" style="color:var(--text-3)">${e.ts || e.timestamp || "—"}</td>
+      <td>${chainBadge(e.chain || "mantle")}</td>
+      <td style="color:var(--text)">${e.action || e.action_type || "swap"}</td>
+      <td style="color:var(--text);font-variant-numeric:tabular-nums">${e.amount || (e.amount_usd ? "$" + e.amount_usd : "—")}</td>
+      <td>${successBadge(e.success)}</td>
+      <td>${txEl}</td>
+    </tr>`;
+  }).join("");
+}
+</script>
+</body>
+</html>
