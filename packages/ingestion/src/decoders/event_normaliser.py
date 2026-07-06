@@ -38,6 +38,17 @@ BURN_TOPIC  = "0x0c396cd989a39f4459b5fa1aed6a9a8dcdbc45908acfd67e028cd568da98982
 # Liquidity Book swap — Merchant Moe (Mantle) and Trader Joe (Arbitrum) are the same fork
 LB_SWAP_TOPIC = "0xad7d6f97abf51ce18e17a38f4d70e975be9c0708474987bb3e26ad21bd93ca70"
 
+# GMX V1 Vault events — all params non-indexed, decoded entirely from data
+# keccak256("Swap(address,address,address,uint256,uint256,uint256,uint256)")
+GMX_SWAP_TOPIC             = "0x0874b2d545cb271cdbda4e093020c452328b24af12382ed62c4d00f5c26709db"
+# keccak256("IncreasePosition(bytes32,address,address,address,uint256,uint256,bool,uint256,uint256)")
+GMX_INCREASE_POSITION_TOPIC = "0x2fe68525253654c21998f35787a8d0f361905ef647c854092430ab65f2f15022"
+# keccak256("DecreasePosition(bytes32,address,address,address,uint256,uint256,bool,uint256,uint256)")
+GMX_DECREASE_POSITION_TOPIC = "0x93d75d64d1f84fc6f430a64fc578bdd4c1e090e90ea2d51773e626d19de56d30"
+
+# GMX V1 stores sizeDelta and collateralDelta in USD × 10^30
+_GMX_USD_PRECISION = 10 ** 30
+
 
 class EventNormaliser:
     """
@@ -97,6 +108,18 @@ class EventNormaliser:
             elif topic0 == LB_SWAP_TOPIC:
                 return self._decode_lb_swap(
                     raw_log, pool_meta, address, block_timestamp, token_prices, chain
+                )
+            elif topic0 == GMX_SWAP_TOPIC:
+                return self._decode_gmx_swap(
+                    raw_log, pool_meta, address, block_timestamp, token_prices, chain
+                )
+            elif topic0 == GMX_INCREASE_POSITION_TOPIC:
+                return self._decode_gmx_position(
+                    raw_log, pool_meta, address, block_timestamp, chain, is_increase=True
+                )
+            elif topic0 == GMX_DECREASE_POSITION_TOPIC:
+                return self._decode_gmx_position(
+                    raw_log, pool_meta, address, block_timestamp, chain, is_increase=False
                 )
         except Exception as exc:
             log.debug("Decode error [%s %s]: %s", pool_meta.protocol, topic0[:10], exc)
@@ -247,6 +270,92 @@ class EventNormaliser:
             timestamp      = _ts(ts),
         )
 
+    # ── GMX V1 spot swap ──────────────────────────────────────────────────────
+
+    def _decode_gmx_swap(
+        self, log_: dict, pool_meta: PoolMeta, pool: str,
+        ts: int, prices: dict, chain: str = "arbitrum",
+    ) -> Optional[NormalisedEvent]:
+        """
+        GMX V1 Vault Swap — all 7 params are non-indexed (in data, not topics).
+        Signature: Swap(address account, address tokenIn, address tokenOut,
+                        uint256 amountIn, uint256 amountOut,
+                        uint256 amountOutAfterFees, uint256 feeBasisPoints)
+        USD value: derived from amountIn using known token prices if available,
+                   else amountOutAfterFees treated as USD proxy (GMX uses USD oracle).
+        """
+        from eth_abi import decode
+        from src.models.raw_event import EventType, Protocol
+
+        data = bytes.fromhex(log_["data"][2:] if log_["data"].startswith("0x") else log_["data"])
+        decoded = decode(
+            ["address", "address", "address", "uint256", "uint256", "uint256", "uint256"],
+            data,
+        )
+        account, token_in, token_out, amount_in, amount_out, amount_out_after_fees, _ = decoded
+
+        # Estimate USD: prefer using token_in price from registry; fall back to stablecoin heuristic
+        amount_usd = _estimate_gmx_usd(token_in.lower(), amount_in, prices)
+
+        return NormalisedEvent(
+            block_number   = _block_num(log_),
+            tx_hash        = _tx_hash(log_),
+            log_index      = _log_index(log_),
+            chain          = chain,
+            protocol       = Protocol(pool_meta.protocol),
+            pool_address   = pool,
+            wallet_address = account.lower(),
+            event_type     = EventType.SWAP,
+            amount_usd     = amount_usd,
+            token_in       = token_in.lower(),
+            token_out      = token_out.lower(),
+            amount_in      = int(amount_in),
+            amount_out     = int(amount_out_after_fees),
+            timestamp      = _ts(ts),
+        )
+
+    # ── GMX V1 perpetual position (increase / decrease) ───────────────────────
+
+    def _decode_gmx_position(
+        self, log_: dict, pool_meta: PoolMeta, pool: str,
+        ts: int, chain: str = "arbitrum", *, is_increase: bool,
+    ) -> Optional[NormalisedEvent]:
+        """
+        GMX V1 IncreasePosition / DecreasePosition — all 9 params non-indexed.
+        Signature: (bytes32 key, address account, address collateralToken,
+                    address indexToken, uint256 collateralDelta, uint256 sizeDelta,
+                    bool isLong, uint256 price, uint256 fee)
+        sizeDelta is in USD × 10^30 (GMX V1 USD precision).
+        """
+        from eth_abi import decode
+        from src.models.raw_event import EventType, Protocol
+
+        data = bytes.fromhex(log_["data"][2:] if log_["data"].startswith("0x") else log_["data"])
+        decoded = decode(
+            ["bytes32", "address", "address", "address",
+             "uint256", "uint256", "bool", "uint256", "uint256"],
+            data,
+        )
+        _, account, collateral_token, index_token, _, size_delta, is_long, price, _ = decoded
+
+        amount_usd = round(size_delta / _GMX_USD_PRECISION, 4)
+        event_type = EventType.OPEN_POSITION if is_increase else EventType.CLOSE_POSITION
+
+        return NormalisedEvent(
+            block_number   = _block_num(log_),
+            tx_hash        = _tx_hash(log_),
+            log_index      = _log_index(log_),
+            chain          = chain,
+            protocol       = Protocol(pool_meta.protocol),
+            pool_address   = pool,
+            wallet_address = account.lower(),
+            event_type     = event_type,
+            amount_usd     = amount_usd,
+            token_in       = collateral_token.lower(),
+            token_out      = index_token.lower(),
+            timestamp      = _ts(ts),
+        )
+
     # ── Liquidity Book swap (Merchant Moe / Trader Joe) ──────────────────────
 
     def _decode_lb_swap(
@@ -301,6 +410,33 @@ def _estimate_usd(
     mnt_price = prices.get("mnt", 0.72)
     raw = max(abs(amount0), abs(amount1))
     return round((raw / 1e18) * mnt_price, 4)
+
+
+def _estimate_gmx_usd(token_addr: str, amount_in: int, prices: dict[str, float]) -> float:
+    """
+    Estimate USD value of a GMX V1 Swap given token address and raw amount.
+    Maps known Arbitrum token addresses to price keys. Falls back to 0 for unknowns.
+    """
+    _GMX_TOKEN_MAP = {
+        # WETH
+        "0x82af49447d8a07e3bd95bd0d56f35241523fbab1": ("eth",  18),
+        # native USDC (Circle)
+        "0xaf88d065e77c8cc2239327c5edb3a432268e5831": ("usdc",  6),
+        # USDC.e (bridged)
+        "0xff970a61a04b1ca14834a43f5de4533ebddb5cc8": ("usdc",  6),
+        # USDT
+        "0xfd086bc7cd5c481dcc9c85ebe478a1c0b69fcbb9": ("usdt",  6),
+        # WBTC
+        "0x2f2a2543b76a4166549f7aab2e75bef0aefc5b0f": ("wbtc",  8),
+        # ARB
+        "0x912ce59144191c1204e64559fe8253a0e49e6548": ("arb",  18),
+    }
+    entry = _GMX_TOKEN_MAP.get(token_addr)
+    if not entry:
+        return 0.0
+    price_key, decimals = entry
+    price = prices.get(price_key, 0.0)
+    return round((amount_in / (10 ** decimals)) * price, 4)
 
 
 # ── Log field helpers ─────────────────────────────────────────────────────────

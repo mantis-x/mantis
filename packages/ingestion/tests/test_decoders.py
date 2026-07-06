@@ -21,7 +21,11 @@ from src.decoders.event_normaliser import (
     MINT_TOPIC,
     BURN_TOPIC,
     LB_SWAP_TOPIC,
+    GMX_SWAP_TOPIC,
+    GMX_INCREASE_POSITION_TOPIC,
+    GMX_DECREASE_POSITION_TOPIC,
     _estimate_usd,
+    _estimate_gmx_usd,
 )
 from src.models.raw_event import EventType, Protocol
 
@@ -299,3 +303,232 @@ class TestMintBurnDecode:
         assert abs(event.amount_usd - 2400.0) < 1.0  # max(2400, 2400)
 
 
+# ── GMX data builders ────────────────────────────────────────────────────────
+
+_GMX_VAULT   = "0x489ee077994b6658eafa855c308275ead8097c4e"
+_GMX_WETH    = "0x82af49447d8a07e3bd95bd0d56f35241523fbab1"
+_GMX_USDCe   = "0xff970a61a04b1ca14834a43f5de4533ebddb5cc8"
+_GMX_USDT    = "0xfd086bc7cd5c481dcc9c85ebe478a1c0b69fcbb9"
+_GMX_REGISTRY = {_GMX_VAULT: PoolMeta("gmx")}
+
+
+def _gmx_swap_data(
+    account: str, token_in: str, token_out: str,
+    amount_in: int, amount_out: int, amount_out_after_fees: int, fee_bp: int,
+) -> str:
+    from eth_abi import encode
+    data = encode(
+        ["address", "address", "address", "uint256", "uint256", "uint256", "uint256"],
+        [account, token_in, token_out, amount_in, amount_out, amount_out_after_fees, fee_bp],
+    )
+    return _hex(data)
+
+
+def _gmx_position_data(
+    key: bytes, account: str, collateral: str, index: str,
+    collateral_delta: int, size_delta: int, is_long: bool, price: int, fee: int,
+) -> str:
+    from eth_abi import encode
+    data = encode(
+        ["bytes32", "address", "address", "address",
+         "uint256", "uint256", "bool", "uint256", "uint256"],
+        [key, account, collateral, index, collateral_delta, size_delta, is_long, price, fee],
+    )
+    return _hex(data)
+
+
+# ── GMX decoder tests ────────────────────────────────────────────────────────
+
+class TestGMXSwapDecode:
+    """GMX V1 Vault Swap event decoding."""
+
+    ACCOUNT = "0xAbCd" + "00" * 18
+
+    def _make_event(self, token_in, token_out, amount_in_wei, amount_out_wei):
+        norm = EventNormaliser(_GMX_REGISTRY)
+        data = _gmx_swap_data(
+            account              = self.ACCOUNT,
+            token_in             = token_in,
+            token_out            = token_out,
+            amount_in            = amount_in_wei,
+            amount_out           = amount_out_wei,
+            amount_out_after_fees= amount_out_wei,
+            fee_bp               = 30,
+        )
+        log = _make_log(GMX_SWAP_TOPIC, data, _GMX_VAULT)
+        return norm.normalise(log, 1_700_000_000, ARBITRUM_PRICES, chain="arbitrum")
+
+    def test_returns_event(self):
+        event = self._make_event(_GMX_WETH, _GMX_USDCe, 10**18, 2400 * 10**6)
+        assert event is not None
+
+    def test_protocol_is_gmx(self):
+        event = self._make_event(_GMX_WETH, _GMX_USDCe, 10**18, 2400 * 10**6)
+        assert event.protocol == Protocol.GMX
+
+    def test_event_type_is_swap(self):
+        event = self._make_event(_GMX_WETH, _GMX_USDCe, 10**18, 2400 * 10**6)
+        assert event.event_type == EventType.SWAP
+
+    def test_chain_is_arbitrum(self):
+        event = self._make_event(_GMX_WETH, _GMX_USDCe, 10**18, 2400 * 10**6)
+        assert event.chain == "arbitrum"
+
+    def test_token_in_decoded(self):
+        event = self._make_event(_GMX_WETH, _GMX_USDCe, 10**18, 2400 * 10**6)
+        assert event.token_in == _GMX_WETH
+
+    def test_token_out_decoded(self):
+        event = self._make_event(_GMX_WETH, _GMX_USDCe, 10**18, 2400 * 10**6)
+        assert event.token_out == _GMX_USDCe
+
+    def test_wallet_address_decoded(self):
+        event = self._make_event(_GMX_WETH, _GMX_USDCe, 10**18, 2400 * 10**6)
+        assert event.wallet_address.lower() == self.ACCOUNT.lower()
+
+    def test_usd_from_weth_in(self):
+        # 1 WETH in @ $2400 → $2400
+        event = self._make_event(_GMX_WETH, _GMX_USDCe, 10**18, 2400 * 10**6)
+        assert abs(event.amount_usd - 2400.0) < 1.0
+
+    def test_usd_from_usdt_in(self):
+        # 500 USDT in (6 decimals) → $500
+        event = self._make_event(_GMX_USDT, _GMX_WETH, 500 * 10**6, int(500/2400 * 10**18))
+        assert abs(event.amount_usd - 500.0) < 1.0
+
+    def test_unknown_token_in_gives_zero_usd(self):
+        unknown = "0x" + "aa" * 20
+        event = self._make_event(unknown, _GMX_WETH, 10**18, 10**6)
+        assert event is not None
+        assert event.amount_usd == 0.0
+
+
+class TestGMXPositionDecode:
+    """GMX V1 IncreasePosition / DecreasePosition event decoding."""
+
+    KEY     = b"\x00" * 32
+    ACCOUNT = "0xAbCd" + "00" * 18
+
+    def _make_increase(self, size_delta_usd: float):
+        """size_delta_usd in human USD → multiplied by 10^30 for GMX encoding."""
+        norm = EventNormaliser(_GMX_REGISTRY)
+        size_delta_raw = int(size_delta_usd * 10**30)
+        data = _gmx_position_data(
+            key=self.KEY, account=self.ACCOUNT,
+            collateral=_GMX_USDCe, index=_GMX_WETH,
+            collateral_delta=int(size_delta_usd * 10**6),
+            size_delta=size_delta_raw,
+            is_long=True, price=int(2400 * 10**30), fee=0,
+        )
+        log = _make_log(GMX_INCREASE_POSITION_TOPIC, data, _GMX_VAULT)
+        return norm.normalise(log, 1_700_000_000, ARBITRUM_PRICES, chain="arbitrum")
+
+    def _make_decrease(self, size_delta_usd: float):
+        norm = EventNormaliser(_GMX_REGISTRY)
+        size_delta_raw = int(size_delta_usd * 10**30)
+        data = _gmx_position_data(
+            key=self.KEY, account=self.ACCOUNT,
+            collateral=_GMX_USDCe, index=_GMX_WETH,
+            collateral_delta=int(size_delta_usd * 10**6),
+            size_delta=size_delta_raw,
+            is_long=False, price=int(2400 * 10**30), fee=0,
+        )
+        log = _make_log(GMX_DECREASE_POSITION_TOPIC, data, _GMX_VAULT)
+        return norm.normalise(log, 1_700_000_000, ARBITRUM_PRICES, chain="arbitrum")
+
+    def test_increase_returns_event(self):
+        assert self._make_increase(10000.0) is not None
+
+    def test_increase_event_type(self):
+        assert self._make_increase(10000.0).event_type == EventType.OPEN_POSITION
+
+    def test_decrease_event_type(self):
+        assert self._make_decrease(5000.0).event_type == EventType.CLOSE_POSITION
+
+    def test_protocol_is_gmx(self):
+        assert self._make_increase(10000.0).protocol == Protocol.GMX
+
+    def test_usd_from_size_delta(self):
+        # $10k position → amount_usd = 10000.0
+        event = self._make_increase(10000.0)
+        assert abs(event.amount_usd - 10000.0) < 0.01
+
+    def test_wallet_address_decoded(self):
+        event = self._make_increase(5000.0)
+        assert event.wallet_address.lower() == self.ACCOUNT.lower()
+
+    def test_collateral_in_token_in_field(self):
+        event = self._make_increase(5000.0)
+        assert event.token_in == _GMX_USDCe
+
+    def test_index_in_token_out_field(self):
+        event = self._make_increase(5000.0)
+        assert event.token_out == _GMX_WETH
+
+    def test_chain_propagated(self):
+        assert self._make_increase(5000.0).chain == "arbitrum"
+
+
+class TestEstimateGMXUSD:
+    """Unit tests for the GMX USD estimation helper."""
+
+    def test_weth_estimation(self):
+        # 1 ETH = $2400
+        usd = _estimate_gmx_usd(_GMX_WETH, 10**18, ARBITRUM_PRICES)
+        assert abs(usd - 2400.0) < 0.01
+
+    def test_usdc_estimation(self):
+        usd = _estimate_gmx_usd(_GMX_USDCe, 500 * 10**6, ARBITRUM_PRICES)
+        assert abs(usd - 500.0) < 0.01
+
+    def test_usdt_estimation(self):
+        usd = _estimate_gmx_usd(_GMX_USDT, 1000 * 10**6, ARBITRUM_PRICES)
+        assert abs(usd - 1000.0) < 0.01
+
+    def test_unknown_token_returns_zero(self):
+        unknown = "0x" + "bb" * 20
+        assert _estimate_gmx_usd(unknown, 10**18, ARBITRUM_PRICES) == 0.0
+
+    def test_zero_price_in_dict_returns_zero(self):
+        prices_no_eth = {k: v for k, v in ARBITRUM_PRICES.items() if k != "eth"}
+        usd = _estimate_gmx_usd(_GMX_WETH, 10**18, prices_no_eth)
+        assert usd == 0.0
+
+
+class TestGMXTopicRouting:
+    """GMX topics route to correct decoders; non-GMX topics ignored on GMX pools."""
+
+    def test_gmx_swap_topic_routes(self):
+        norm = EventNormaliser(_GMX_REGISTRY)
+        data = _gmx_swap_data(
+            "0x" + "aa" * 20, _GMX_WETH, _GMX_USDCe,
+            10**18, 2400 * 10**6, 2400 * 10**6, 30,
+        )
+        log = _make_log(GMX_SWAP_TOPIC, data, _GMX_VAULT)
+        event = norm.normalise(log, 0, ARBITRUM_PRICES, chain="arbitrum")
+        assert event is not None and event.event_type == EventType.SWAP
+
+    def test_increase_position_topic_routes(self):
+        norm = EventNormaliser(_GMX_REGISTRY)
+        data = _gmx_position_data(
+            b"\x00"*32, "0x"+"aa"*20, _GMX_USDCe, _GMX_WETH,
+            0, int(5000 * 10**30), True, int(2400 * 10**30), 0,
+        )
+        log = _make_log(GMX_INCREASE_POSITION_TOPIC, data, _GMX_VAULT)
+        event = norm.normalise(log, 0, ARBITRUM_PRICES, chain="arbitrum")
+        assert event is not None and event.event_type == EventType.OPEN_POSITION
+
+    def test_decrease_position_topic_routes(self):
+        norm = EventNormaliser(_GMX_REGISTRY)
+        data = _gmx_position_data(
+            b"\x00"*32, "0x"+"aa"*20, _GMX_USDCe, _GMX_WETH,
+            0, int(5000 * 10**30), False, int(2400 * 10**30), 0,
+        )
+        log = _make_log(GMX_DECREASE_POSITION_TOPIC, data, _GMX_VAULT)
+        event = norm.normalise(log, 0, ARBITRUM_PRICES, chain="arbitrum")
+        assert event is not None and event.event_type == EventType.CLOSE_POSITION
+
+    def test_unhandled_topic_on_gmx_pool_returns_none(self):
+        norm = EventNormaliser(_GMX_REGISTRY)
+        log = _make_log("0x" + "cc" * 32, "0x", _GMX_VAULT)
+        assert norm.normalise(log, 0, ARBITRUM_PRICES) is None

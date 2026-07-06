@@ -20,12 +20,16 @@ class Protocol(str, Enum):
     # Arbitrum (Phase 1)
     UNISWAP_V3    = "uniswap_v3"
     TRADER_JOE    = "trader_joe"
+    # Arbitrum (Phase 2)
+    GMX           = "gmx"
 
 
 class EventType(str, Enum):
-    SWAP  = "swap"
-    MINT  = "mint"    # LP deposit
-    BURN  = "burn"    # LP withdrawal
+    SWAP           = "swap"
+    MINT           = "mint"           # LP deposit
+    BURN           = "burn"           # LP withdrawal
+    OPEN_POSITION  = "open_position"  # GMX perp position increase
+    CLOSE_POSITION = "close_position" # GMX perp position decrease
 
 
 @dataclass

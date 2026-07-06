@@ -162,6 +162,10 @@ ARBITRUM = ChainConfig(
         # Trader Joe (Liquidity Book) — same LB_SWAP_TOPIC as Merchant Moe
         # Verify router + pair addresses on arbiscan.io
         "0xb4315e873dbcf96ffd0acd8ea43f689d8c20fB30": PoolMeta("trader_joe"),  # LB Router v2.2
+        # GMX V1 — perpetuals + spot swap; all events non-indexed, decoded from data
+        # Swap/IncreasePosition/DecreasePosition emitted by Vault
+        "0x489ee077994b6658eafa855c308275ead8097c4e": PoolMeta("gmx"),  # GMX V1 Vault
+        "0x321f653eed006ad1c29d174e17d96351bde22649": PoolMeta("gmx"),  # GLP Manager
     },
     token_prices={
         "eth":  2400.0,
