@@ -31,6 +31,13 @@ _SEPOLIA_ROUTER = "0x101F443B4d1b059569D643917553c771E1b9663E"
 _SEPOLIA_WETH   = "0x980B62Da83eFf3D4576C647993b0c1D7faf17c73"
 _SEPOLIA_USDC   = "0x75faf114eafb1BDbe2F0316DF893fd58CE46AA4d"
 
+# ── Default RPC / price oracle / quoter (mainnet — override for testnet via env) ──
+_DEFAULT_RPC   = "https://arb1.arbitrum.io/rpc"
+# Uniswap V3 QuoterV2 — verify on arbiscan.io before relying on it for a new chain
+_QUOTER_V2     = "0x61fFE014bA17989E743c5F6cB21bF9697530B21e"
+# Chainlink ETH/USD price feed — Arbitrum One mainnet
+_ETH_USD_FEED  = "0x639Fe6ab55C921f74e7fac1ee960C0B6293ba612"
+
 # Pool fee tiers
 FEE_LOWEST  = 100    # 0.01%
 FEE_LOW     = 500    # 0.05%  ← WETH/USDC default
@@ -96,6 +103,54 @@ _ERC20_ABI = [
     },
 ]
 
+_QUOTER_ABI = [
+    {
+        "inputs": [{
+            "components": [
+                {"name": "tokenIn",           "type": "address"},
+                {"name": "tokenOut",          "type": "address"},
+                {"name": "amountIn",          "type": "uint256"},
+                {"name": "fee",               "type": "uint24"},
+                {"name": "sqrtPriceLimitX96", "type": "uint160"},
+            ],
+            "name": "params",
+            "type": "tuple",
+        }],
+        "name": "quoteExactInputSingle",
+        "outputs": [
+            {"name": "amountOut",               "type": "uint256"},
+            {"name": "sqrtPriceX96After",        "type": "uint160"},
+            {"name": "initializedTicksCrossed",  "type": "uint32"},
+            {"name": "gasEstimate",              "type": "uint256"},
+        ],
+        "stateMutability": "nonpayable",
+        "type": "function",
+    },
+]
+
+_CHAINLINK_FEED_ABI = [
+    {
+        "inputs": [],
+        "name": "latestRoundData",
+        "outputs": [
+            {"name": "roundId",         "type": "uint80"},
+            {"name": "answer",          "type": "int256"},
+            {"name": "startedAt",       "type": "uint256"},
+            {"name": "updatedAt",       "type": "uint256"},
+            {"name": "answeredInRound", "type": "uint80"},
+        ],
+        "stateMutability": "view",
+        "type": "function",
+    },
+    {
+        "inputs": [],
+        "name": "decimals",
+        "outputs": [{"name": "", "type": "uint8"}],
+        "stateMutability": "view",
+        "type": "function",
+    },
+]
+
 
 class ArbitrumSwapExecutor:
     """
@@ -110,13 +165,20 @@ class ArbitrumSwapExecutor:
         self._w3       = None
         self._account  = None
         self._router   = None
+        self._quoter   = None
+        self._feed     = None
         self._chain_id = None
         self._ready    = False
 
-        self._rpc_url      = os.getenv("ARBITRUM_RPC_URL", _MAINNET_ROUTER)
-        self._router_addr  = os.getenv("ARB_SWAP_ROUTER", _MAINNET_ROUTER)
-        self._default_weth = os.getenv("ARB_WETH_ADDRESS", _MAINNET_WETH)
-        self._default_usdc = os.getenv("ARB_USDC_ADDRESS", _MAINNET_USDC)
+        self._rpc_url       = os.getenv("ARBITRUM_RPC_URL", _DEFAULT_RPC)
+        self._router_addr   = os.getenv("ARB_SWAP_ROUTER", _MAINNET_ROUTER)
+        self._quoter_addr   = os.getenv("ARB_QUOTER_V2", _QUOTER_V2)
+        self._eth_feed_addr = os.getenv("ARB_ETH_USD_FEED", _ETH_USD_FEED)
+        self._default_weth  = os.getenv("ARB_WETH_ADDRESS", _MAINNET_WETH)
+        self._default_usdc  = os.getenv("ARB_USDC_ADDRESS", _MAINNET_USDC)
+
+        self._eth_price_cache    = None
+        self._eth_price_cache_ts = 0.0
 
         try:
             self._setup()
@@ -127,22 +189,29 @@ class ArbitrumSwapExecutor:
         from web3 import Web3
         from eth_account import Account
 
-        rpc_url     = os.getenv("ARBITRUM_RPC_URL", "https://arb1.arbitrum.io/rpc")
         private_key = os.getenv("DEPLOYER_PRIVATE_KEY", "")
 
         if not private_key:
             log.warning("DEPLOYER_PRIVATE_KEY not set — ArbitrumSwapExecutor in stub mode")
             return
 
-        self._w3 = Web3(Web3.HTTPProvider(rpc_url, request_kwargs={"timeout": 30}))
+        self._w3 = Web3(Web3.HTTPProvider(self._rpc_url, request_kwargs={"timeout": 30}))
         if not self._w3.is_connected():
-            raise ConnectionError(f"Cannot connect to Arbitrum RPC: {rpc_url}")
+            raise ConnectionError(f"Cannot connect to Arbitrum RPC: {self._rpc_url}")
 
         self._account  = Account.from_key(private_key)
         self._chain_id = self._w3.eth.chain_id
         self._router   = self._w3.eth.contract(
             address=Web3.to_checksum_address(self._router_addr),
             abi=_ROUTER_ABI,
+        )
+        self._quoter = self._w3.eth.contract(
+            address=Web3.to_checksum_address(self._quoter_addr),
+            abi=_QUOTER_ABI,
+        )
+        self._feed = self._w3.eth.contract(
+            address=Web3.to_checksum_address(self._eth_feed_addr),
+            abi=_CHAINLINK_FEED_ABI,
         )
         self._ready = True
 
@@ -193,8 +262,19 @@ class ArbitrumSwapExecutor:
             fee, self._dry_run,
         )
 
-        # Minimum output with slippage tolerance (0 = accept any in dry_run)
-        amount_out_min = 0 if self._dry_run else 1  # production: use quoter
+        # Minimum output with slippage tolerance.
+        # Live trades MUST be quoted on-chain first — an unquoted amountOutMinimum
+        # accepts any output and offers no sandwich/thin-liquidity protection.
+        if self._dry_run:
+            amount_out_min = 0
+        else:
+            try:
+                quoted_out = self._get_quote(token_in_c, token_out_c, fee, amount_in)
+            except Exception as exc:
+                raise RuntimeError(
+                    f"Quoter call failed — refusing to send unprotected live swap: {exc}"
+                )
+            amount_out_min = int(quoted_out * (1 - slippage))
 
         params = (
             token_in_c,
@@ -312,15 +392,47 @@ class ArbitrumSwapExecutor:
             raise RuntimeError(f"Approve tx reverted: {tx_hash.hex()}")
         log.info("Approval confirmed: tx=%s", tx_hash.hex()[:16])
 
+    def _get_quote(self, token_in_c: str, token_out_c: str, fee: int, amount_in: int) -> int:
+        """Call Uniswap V3 QuoterV2 for an on-chain expected-output quote."""
+        params = (token_in_c, token_out_c, amount_in, fee, 0)
+        result = self._quoter.functions.quoteExactInputSingle(params).call(
+            {"from": self._account.address}
+        )
+        return result[0]
+
+    def _get_eth_price_usd(self) -> float:
+        """
+        Fetch the live ETH/USD price from the Chainlink feed, cached for 60s.
+        Falls back to the ETH_PRICE_USD env var (default 2400) if the feed
+        read fails — acceptable for dry-run sizing, but live trades should
+        not be sized on a stale fallback for extended periods.
+        """
+        now = time.time()
+        if self._eth_price_cache and now - self._eth_price_cache_ts < 60:
+            return self._eth_price_cache
+
+        try:
+            decimals = self._feed.functions.decimals().call()
+            _, answer, _, _, _ = self._feed.functions.latestRoundData().call()
+            price = answer / (10 ** decimals)
+            self._eth_price_cache    = price
+            self._eth_price_cache_ts = now
+            return price
+        except Exception as exc:
+            log.warning(
+                "Chainlink ETH/USD feed read failed (%s); using ETH_PRICE_USD env fallback", exc
+            )
+            return float(os.getenv("ETH_PRICE_USD", "2400"))
+
     def _usd_to_units(self, amount_usd: float, decimals: int, token_addr: str) -> int:
         """
         Convert a USD amount to token base units.
         For stablecoins (USDC/USDT): 1 token ≈ $1, so units = amount_usd * 10^decimals.
-        For WETH: units = (amount_usd / 2400) * 10^18  (rough ETH price; production uses oracle).
+        For WETH: units = (amount_usd / live_eth_price) * 10^decimals.
         """
         weth = self._default_weth.lower()
         if token_addr.lower() == weth:
-            eth_price = float(os.getenv("ETH_PRICE_USD", "2400"))
+            eth_price = self._get_eth_price_usd()
             return int((amount_usd / eth_price) * (10 ** decimals))
         # Stablecoin / unknown: treat 1 token = $1
         return int(amount_usd * (10 ** decimals))

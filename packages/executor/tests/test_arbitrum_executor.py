@@ -2,6 +2,7 @@
 import sys, os, time
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
+import pytest
 from unittest.mock import MagicMock, patch, PropertyMock
 from src.arbitrum.swap_executor import (
     ArbitrumSwapExecutor,
@@ -90,6 +91,48 @@ class TestArbitrumSwapExecutorUsdToUnits:
         assert units == int(0.1 * 10 ** 18)
 
 
+class TestChainlinkEthPrice:
+    """Tests for the live Chainlink ETH/USD price feed with fallback."""
+
+    def _make_executor_with_feed(self, answer, decimals=8):
+        executor = ArbitrumSwapExecutor.__new__(ArbitrumSwapExecutor)
+        executor._eth_price_cache = None
+        executor._eth_price_cache_ts = 0.0
+        mock_feed = MagicMock()
+        mock_feed.functions.decimals.return_value.call.return_value = decimals
+        mock_feed.functions.latestRoundData.return_value.call.return_value = (
+            1, answer, 0, 0, 1,
+        )
+        executor._feed = mock_feed
+        return executor
+
+    def test_reads_price_from_feed(self):
+        executor = self._make_executor_with_feed(answer=3_200_00000000)  # $3200.00000000 @ 8 decimals
+        price = executor._get_eth_price_usd()
+        assert abs(price - 3200.0) < 0.01
+
+    def test_caches_price_for_60_seconds(self):
+        executor = self._make_executor_with_feed(answer=3_200_00000000)
+        first  = executor._get_eth_price_usd()
+        # Change the mock's return value — cached call should NOT pick it up
+        executor._feed.functions.latestRoundData.return_value.call.return_value = (
+            1, 9_999_00000000, 0, 0, 1,
+        )
+        second = executor._get_eth_price_usd()
+        assert first == second == pytest.approx(3200.0, rel=0.01)
+
+    def test_falls_back_to_env_var_on_feed_error(self):
+        os.environ["ETH_PRICE_USD"] = "2500"
+        executor = ArbitrumSwapExecutor.__new__(ArbitrumSwapExecutor)
+        executor._eth_price_cache = None
+        executor._eth_price_cache_ts = 0.0
+        mock_feed = MagicMock()
+        mock_feed.functions.decimals.return_value.call.side_effect = Exception("rpc down")
+        executor._feed = mock_feed
+        price = executor._get_eth_price_usd()
+        assert price == 2500.0
+
+
 class TestArbitrumSwapExecutorDryRunWithMockedW3:
     """Tests for _simulate() path when w3 is mocked."""
 
@@ -145,6 +188,75 @@ class TestArbitrumSwapExecutorDryRunWithMockedW3:
         result = executor.swap(_MAINNET_USDC, _MAINNET_WETH, 5.0)
         assert result["simulated"] is True
         assert result["amount_out"] == 0
+
+
+class TestArbitrumSwapExecutorLiveModeSlippage:
+    """
+    Live trades (dry_run=False) must derive amountOutMinimum from an on-chain
+    quote, not accept-any-output — this is the real slippage protection.
+    """
+
+    def _make_live_executor(self, quote_out=1_000_000):
+        executor = ArbitrumSwapExecutor.__new__(ArbitrumSwapExecutor)
+        executor._dry_run      = False
+        executor._ready        = True
+        executor._router_addr  = _MAINNET_WETH  # dummy
+        executor._default_weth = _MAINNET_WETH
+        executor._default_usdc = _MAINNET_USDC
+
+        mock_quoter = MagicMock()
+        mock_quoter.functions.quoteExactInputSingle.return_value.call.return_value = (
+            quote_out, 0, 0, 0,
+        )
+        executor._quoter = mock_quoter
+
+        mock_router = MagicMock()
+        executor._router = mock_router
+
+        mock_account = MagicMock()
+        mock_account.address = "0x1234"
+        executor._account = mock_account
+
+        mock_w3 = MagicMock()
+        mock_token_contract = MagicMock()
+        mock_token_contract.functions.decimals.return_value.call.return_value = 6
+        mock_token_contract.functions.allowance.return_value.call.return_value = 10 ** 30
+        mock_w3.eth.contract.return_value = mock_token_contract
+        mock_w3.eth.get_transaction_count.return_value = 0
+        mock_w3.eth.gas_price = 100_000_000
+        mock_w3.eth.send_raw_transaction.return_value = b"\x01" * 32
+        mock_w3.eth.wait_for_transaction_receipt.return_value = {"status": 1, "gasUsed": 100_000}
+        mock_w3.eth.account.sign_transaction.return_value = MagicMock(rawTransaction=b"\x02" * 10)
+        from web3 import Web3
+        mock_w3.to_checksum_address = Web3.to_checksum_address
+        executor._w3 = mock_w3
+        executor._chain_id = 42161
+
+        return executor
+
+    def test_live_swap_queries_quoter(self):
+        executor = self._make_live_executor(quote_out=1_000_000)
+        executor.swap(_MAINNET_USDC, _MAINNET_WETH, 5.0, slippage=0.02)
+        executor._quoter.functions.quoteExactInputSingle.assert_called_once()
+
+    def test_live_swap_uses_quote_derived_min_out(self):
+        """amountOutMinimum passed to exactInputSingle == quote * (1 - slippage)."""
+        executor = self._make_live_executor(quote_out=1_000_000)
+        executor.swap(_MAINNET_USDC, _MAINNET_WETH, 5.0, slippage=0.02)
+        call_args = executor._router.functions.exactInputSingle.call_args
+        params = call_args[0][0]
+        amount_out_min = params[5]
+        assert amount_out_min == int(1_000_000 * 0.98)
+
+    def test_live_swap_aborts_when_quoter_fails(self):
+        """A live trade must never fall back to accept-any-output on quoter failure."""
+        executor = self._make_live_executor()
+        executor._quoter.functions.quoteExactInputSingle.return_value.call.side_effect = (
+            Exception("quoter reverted")
+        )
+        with pytest.raises(RuntimeError, match="Quoter call failed"):
+            executor.swap(_MAINNET_USDC, _MAINNET_WETH, 5.0)
+        executor._router.functions.exactInputSingle.assert_not_called()
 
 
 # ── Executor chain routing tests ──────────────────────────────────────────────

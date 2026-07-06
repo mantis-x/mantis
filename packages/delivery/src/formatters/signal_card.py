@@ -17,6 +17,7 @@ PROTOCOL_NAMES = {
     "fluxion":       "Fluxion",
     "uniswap_v3":    "Uniswap V3",
     "trader_joe":    "Trader Joe",
+    "gmx":           "GMX",
 }
 
 SIGNAL_EMOJIS = {
