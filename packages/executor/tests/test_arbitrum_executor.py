@@ -258,6 +258,19 @@ class TestArbitrumSwapExecutorLiveModeSlippage:
             executor.swap(_MAINNET_USDC, _MAINNET_WETH, 5.0)
         executor._router.functions.exactInputSingle.assert_not_called()
 
+    def test_live_swap_buffers_gas_price(self):
+        """
+        eth_gasPrice can be stale by the time a tx lands on a fast-basefee chain
+        like Arbitrum ('max fee per gas less than block base fee' otherwise).
+        The submitted gasPrice must be inflated above the raw quoted value.
+        """
+        executor = self._make_live_executor()
+        executor.swap(_MAINNET_USDC, _MAINNET_WETH, 5.0)
+        build_call = executor._router.functions.exactInputSingle.return_value.build_transaction
+        submitted_gas_price = build_call.call_args[0][0]["gasPrice"]
+        assert submitted_gas_price > executor._w3.eth.gas_price
+        assert submitted_gas_price == int(executor._w3.eth.gas_price * 1.2)
+
 
 # ── Executor chain routing tests ──────────────────────────────────────────────
 

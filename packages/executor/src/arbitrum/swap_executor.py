@@ -345,7 +345,7 @@ class ArbitrumSwapExecutor:
             "from":     account.address,
             "nonce":    nonce,
             "gas":      int(gas * 1.2),
-            "gasPrice": w3.eth.gas_price,
+            "gasPrice": self._buffered_gas_price(),
             "chainId":  self._chain_id,
             "value":    0,
         })
@@ -382,7 +382,7 @@ class ArbitrumSwapExecutor:
             "from":     account.address,
             "nonce":    nonce,
             "gas":      int(gas * 1.2),
-            "gasPrice": w3.eth.gas_price,
+            "gasPrice": self._buffered_gas_price(),
             "chainId":  self._chain_id,
         })
         signed  = w3.eth.account.sign_transaction(tx, account.key)
@@ -391,6 +391,15 @@ class ArbitrumSwapExecutor:
         if receipt["status"] != 1:
             raise RuntimeError(f"Approve tx reverted: {tx_hash.hex()}")
         log.info("Approval confirmed: tx=%s", tx_hash.hex()[:16])
+
+    def _buffered_gas_price(self) -> int:
+        """
+        eth_gasPrice reflects the last block's base fee; on chains with fast
+        base-fee adjustment (e.g. Arbitrum) it can be stale by the time the tx
+        lands, causing 'max fee per gas less than block base fee'. A 20% buffer
+        avoids the retry loop this would otherwise force on every submission.
+        """
+        return int(self._w3.eth.gas_price * 1.2)
 
     def _get_quote(self, token_in_c: str, token_out_c: str, fee: int, amount_in: int) -> int:
         """Call Uniswap V3 QuoterV2 for an on-chain expected-output quote."""
