@@ -80,6 +80,16 @@ services:
     restart: unless-stopped
     command: python -m src.worker
 
+  # ── Track record / backtest instrumentation ─────────────────────────────
+  tracking:
+    build: ./packages/shared
+    env_file: .env
+    depends_on:
+      postgres: { condition: service_healthy }
+      redis:    { condition: service_healthy }
+    restart: unless-stopped
+    command: python -m src.tracking.worker
+
 volumes:
   postgres_data:
   redis_data:

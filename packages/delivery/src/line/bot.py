@@ -31,7 +31,7 @@ from src.common.subscription_manager import SubscriptionManager
 
 log = logging.getLogger(__name__)
 
-line_sub_manager = SubscriptionManager()
+line_sub_manager = SubscriptionManager(channel="line")
 
 
 def build_app(

@@ -85,7 +85,7 @@ class Executor:
                 continue   # signal didn't match this agent's rules
 
             result = self._execute(request)
-            agent.record_execution(result.success)
+            self.registry.record_execution(agent.agent_id, result.success)
             results.append(result)
 
             # Log to ERC-8004 on Mantle
@@ -137,8 +137,9 @@ class Executor:
             tx_hash = result_data.get("tx_hash", "mock_tx_" + "0" * 20)
             return ExecutionResult.success_from(
                 request,
-                tx_hash    = tx_hash,
-                amount_usd = request.amount_usd,
+                tx_hash         = tx_hash,
+                amount_usd      = request.amount_usd,
+                execution_price = result_data.get("execution_price"),
             )
 
         except ByrealCLIError as exc:

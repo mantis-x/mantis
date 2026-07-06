@@ -1,7 +1,7 @@
 """
-Agent — persisted replacement for the in-memory Agent dataclass that used
-to live in packages/executor/src/identity/agent_registry.py. Same shape,
-durable across restarts.
+AgentRow — mirrors packages/shared/src/db/models/agent.py exactly (same
+table, same columns). This package doesn't run Alembic itself; the table
+is created by packages/shared's migrations. Keep the two files in sync.
 """
 from __future__ import annotations
 
@@ -17,19 +17,14 @@ from src.db.models.base import Base
 class AgentRow(Base):
     __tablename__ = "agents"
 
-    # Named agent_id (not the SQLAlchemy-conventional `id`) because every
-    # caller across executor.py/rule_engine.py already reads `agent.agent_id`
-    # — matching it here means the ORM row can be used as a drop-in Agent.
     agent_id:     Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     owner_wallet: Mapped[str] = mapped_column(String, nullable=False)
     name:         Mapped[str] = mapped_column(String, nullable=False)
     rules:        Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
     active:       Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
 
-    # On-chain identity (set after mintAgent)
     erc8004_token_id: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
 
-    # Stats
     total_decisions:  Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     total_executions: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     total_aborts:     Mapped[int] = mapped_column(Integer, nullable=False, default=0)
@@ -38,16 +33,3 @@ class AgentRow(Base):
         DateTime(timezone=True), nullable=False,
         default=lambda: datetime.now(tz=timezone.utc),
     )
-
-    @property
-    def success_rate(self) -> float:
-        if self.total_decisions == 0:
-            return 0.0
-        return self.total_executions / self.total_decisions * 100
-
-    def record_execution(self, success: bool) -> None:
-        self.total_decisions += 1
-        if success:
-            self.total_executions += 1
-        else:
-            self.total_aborts += 1

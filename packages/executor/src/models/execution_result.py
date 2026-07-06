@@ -52,6 +52,7 @@ class ExecutionResult:
             "tx_hash":         self.tx_hash,
             "amount_usd":      self.amount_usd,
             "gas_used":        self.gas_used,
+            "execution_price": self.execution_price,
             "abort_reason":    self.abort_reason,
             "guard_failed":    self.guard_failed,
             "executed_at":     self.executed_at.isoformat(),
@@ -69,12 +70,16 @@ class ExecutionResult:
         )
 
     @classmethod
-    def success_from(cls, request, tx_hash: str, amount_usd: float) -> "ExecutionResult":
+    def success_from(
+        cls, request, tx_hash: str, amount_usd: float,
+        execution_price: Optional[float] = None,
+    ) -> "ExecutionResult":
         return cls(
-            agent_id    = request.agent_id,
-            signal_id   = request.signal_id,
-            action_type = request.action_type.value,
-            status      = ResultStatus.SUCCESS,
-            tx_hash     = tx_hash,
-            amount_usd  = amount_usd,
+            agent_id        = request.agent_id,
+            signal_id       = request.signal_id,
+            action_type     = request.action_type.value,
+            status          = ResultStatus.SUCCESS,
+            tx_hash         = tx_hash,
+            amount_usd      = amount_usd,
+            execution_price = execution_price,
         )

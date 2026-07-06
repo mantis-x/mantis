@@ -17,6 +17,10 @@ Redis keys:
                                        exclusive copy of every signal;
                                        consuming one must never remove a
                                        signal the other hasn't seen yet)
+  OUTPUT:  mantis:signals:tracking    (tracking worker reads here — feeds
+                                       the durable Postgres signals/
+                                       signal_outcomes tables used for the
+                                       track record / backtest reports)
 """
 from __future__ import annotations
 
@@ -96,8 +100,13 @@ async def main() -> None:
                 await r.rpush("mantis:signals:exec", signal_payload)
                 await r.ltrim("mantis:signals:exec", 0, 4999)
 
+                # Tracking's independent FIFO queue — same reasoning as
+                # mantis:signals:exec above.
+                await r.rpush("mantis:signals:tracking", signal_payload)
+                await r.ltrim("mantis:signals:tracking", 0, 4999)
+
                 log.info(
-                    "📤 Signal queued for delivery + execution: %s confidence=%d",
+                    "📤 Signal queued for delivery + execution + tracking: %s confidence=%d",
                     signal.signal_type.value, signal.confidence,
                 )
 

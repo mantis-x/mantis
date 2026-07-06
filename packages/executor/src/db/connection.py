@@ -1,15 +1,13 @@
 """
-Database connection — a single SQLAlchemy engine + session factory shared
-by every package that persists to Postgres: executor's agents, delivery's
-subscriptions, and the signal/signal_outcome/execution tables that back
-the track record / backtest instrumentation.
+Database connection — mirrors packages/shared/src/db/connection.py.
 
-Usage:
-
-    from src.db.connection import get_session
-    with get_session() as session:
-        session.add(some_row)
-        # commits automatically on clean exit, rolls back on exception
+This is a deliberate copy, not a cross-package import: every package in
+this repo runs its worker as its own process with its own top-level `src`
+namespace (see worker.py's sys.path.insert pattern in every package). Two
+packages' `src` trees cannot both be imported as `src.*` in the same
+process — whichever was inserted into sys.path first wins, and the second
+import silently resolves against the wrong package. Keep this in sync with
+packages/shared/src/db/connection.py if it changes.
 """
 from __future__ import annotations
 
@@ -24,7 +22,6 @@ _SessionLocal = None
 
 
 def get_engine():
-    """Lazily create the module-level engine from the DATABASE_URL env var."""
     global _engine
     if _engine is None:
         database_url = os.getenv(
@@ -43,7 +40,6 @@ def get_session_factory():
 
 @contextmanager
 def get_session():
-    """Context manager yielding a session; commits on success, rolls back on error."""
     session = get_session_factory()()
     try:
         yield session
@@ -56,7 +52,6 @@ def get_session():
 
 
 def reset_engine_for_tests() -> None:
-    """Drop the cached engine/session factory so tests can point at a fresh DATABASE_URL."""
     global _engine, _SessionLocal
     _engine = None
     _SessionLocal = None

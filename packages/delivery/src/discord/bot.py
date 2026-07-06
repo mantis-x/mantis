@@ -16,7 +16,7 @@ from src.common.subscription_manager import SubscriptionManager
 
 log = logging.getLogger(__name__)
 
-discord_sub_manager = SubscriptionManager()
+discord_sub_manager = SubscriptionManager(channel="discord")
 
 
 def build_bot(sub_manager: SubscriptionManager, stats: dict) -> commands.Bot:

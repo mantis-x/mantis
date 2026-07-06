@@ -1,127 +1,77 @@
 """
-SubscriptionManager — manages user subscriptions in memory.
+SubscriptionManager (Telegram) — thin int-chat_id wrapper around the
+shared, Postgres-backed src.common.subscription_manager.SubscriptionManager
+(channel="telegram").
 
-Stores: {chat_id: {min_confidence, signal_types, protocols}}
-Production: replace with Postgres subscriptions table.
-
-Free tier: 3 alerts/day cap (tracked per chat_id).
-Pro tier: unlimited (set by manually toggling is_pro).
+Previously this was its own parallel in-memory implementation, duplicating
+almost all of the common one's logic. Telegram's chat_id is the only
+channel identifier that's an int rather than a string (LINE userIds and
+Discord channel ids are already strings), so this wrapper's only job is
+translating chat_id (int) <-> recipient_id (str) at the boundary — every
+method below just stringifies its chat_id argument(s) and delegates.
 """
 from __future__ import annotations
 
-import logging
-from collections import defaultdict
-from datetime import datetime, date, timezone
-from dataclasses import dataclass, field
 from typing import Optional
 
-log = logging.getLogger(__name__)
+from src.common.subscription_manager import SubscriptionManager as _CommonSubscriptionManager
+from src.common.subscription_manager import Subscription as _CommonSubscription
 
 FREE_DAILY_LIMIT = 3
 
 
-@dataclass
-class Subscription:
-    chat_id:        int
-    min_confidence: int             = 60
-    signal_types:   Optional[set]   = None   # None = all types
-    protocols:      Optional[set]   = None   # None = all protocols
-    chains:         Optional[set]   = None   # None = all chains (mantle, arbitrum, …)
-    is_pro:         bool            = False
-    joined_at:      datetime        = field(
-        default_factory=lambda: datetime.now(tz=timezone.utc)
-    )
-    # Daily alert tracking
-    alerts_today:   int             = 0
-    last_alert_date: Optional[date] = None
+class Subscription(_CommonSubscription):
+    """Same shape as the common Subscription, with chat_id (int) instead of recipient_id (str)."""
 
-    def can_receive(self, signal: dict) -> bool:
-        """Check if this subscriber should receive this signal."""
-        # Confidence filter
-        if signal.get("confidence", 0) < self.min_confidence:
-            return False
-        # Signal type filter
-        if self.signal_types and signal.get("signal_type") not in self.signal_types:
-            return False
-        # Protocol filter
-        if self.protocols and signal.get("protocol") not in self.protocols:
-            return False
-        # Chain filter
-        if self.chains and signal.get("chain", "mantle") not in self.chains:
-            return False
-        # Daily cap (free tier)
-        if not self.is_pro:
-            today = datetime.now(tz=timezone.utc).date()
-            if self.last_alert_date != today:
-                self.alerts_today   = 0
-                self.last_alert_date = today
-            if self.alerts_today >= FREE_DAILY_LIMIT:
-                return False
-        return True
-
-    def record_alert(self) -> None:
-        """Increment daily alert counter."""
-        today = datetime.now(tz=timezone.utc).date()
-        if self.last_alert_date != today:
-            self.alerts_today   = 0
-            self.last_alert_date = today
-        self.alerts_today += 1
+    def __init__(self, chat_id: int, **kwargs):
+        super().__init__(recipient_id=str(chat_id), **kwargs)
+        self.chat_id = chat_id
 
 
 class SubscriptionManager:
     def __init__(self):
-        self._subs: dict[int, Subscription] = {}
-        self._signal_history: list[dict]    = []   # last 50 signals
+        self._store = _CommonSubscriptionManager(channel="telegram")
 
     def subscribe(self, chat_id: int) -> bool:
-        """Subscribe a chat. Returns True if new, False if already subscribed."""
-        if chat_id in self._subs:
-            return False
-        self._subs[chat_id] = Subscription(chat_id=chat_id)
-        log.info("New subscriber: chat_id=%d total=%d", chat_id, len(self._subs))
-        return True
+        return self._store.subscribe(str(chat_id))
 
     def set_chains(self, chat_id: int, chains: Optional[set]) -> bool:
-        """Set chain filter for a subscriber. None = all chains. Returns False if not subscribed."""
-        sub = self._subs.get(chat_id)
-        if sub is None:
-            return False
-        sub.chains = chains
-        log.info("Chain filter set: chat_id=%d chains=%s", chat_id, chains)
-        return True
+        return self._store.set_chains(str(chat_id), chains)
 
     def unsubscribe(self, chat_id: int) -> bool:
-        """Unsubscribe. Returns True if was subscribed."""
-        if chat_id not in self._subs:
-            return False
-        del self._subs[chat_id]
-        log.info("Unsubscribed: chat_id=%d remaining=%d", chat_id, len(self._subs))
-        return True
+        return self._store.unsubscribe(str(chat_id))
 
     def is_subscribed(self, chat_id: int) -> bool:
-        return chat_id in self._subs
+        return self._store.is_subscribed(str(chat_id))
 
     def get_subscribers(self, signal: dict) -> list[int]:
-        """Return chat_ids that should receive this signal."""
-        eligible = []
-        for chat_id, sub in self._subs.items():
-            if sub.can_receive(signal):
-                eligible.append(chat_id)
-        return eligible
+        """Return chat_ids (int) that should receive this signal."""
+        return [int(rid) for rid in self._store.get_subscribers(signal)]
 
     def record_delivery(self, chat_id: int) -> None:
-        if chat_id in self._subs:
-            self._subs[chat_id].record_alert()
+        self._store.record_delivery(str(chat_id))
 
     def add_to_history(self, signal: dict) -> None:
-        self._signal_history.insert(0, signal)
-        self._signal_history = self._signal_history[:50]
+        self._store.add_to_history(signal)
 
     def get_history(self, limit: int = 5) -> list[dict]:
-        return self._signal_history[:limit]
+        return self._store.get_history(limit)
 
     def subscriber_count(self) -> int:
-        return len(self._subs)
+        return self._store.subscriber_count()
 
     def get_subscription(self, chat_id: int) -> Optional[Subscription]:
-        return self._subs.get(chat_id)
+        common_sub = self._store.get_subscription(str(chat_id))
+        if common_sub is None:
+            return None
+        return Subscription(
+            chat_id=chat_id,
+            min_confidence=common_sub.min_confidence,
+            signal_types=common_sub.signal_types,
+            protocols=common_sub.protocols,
+            chains=common_sub.chains,
+            is_pro=common_sub.is_pro,
+            joined_at=common_sub.joined_at,
+            alerts_today=common_sub.alerts_today,
+            last_alert_date=common_sub.last_alert_date,
+        )

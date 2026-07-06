@@ -1,12 +1,8 @@
 """
-Subscription — persisted replacement for the three near-identical in-memory
-SubscriptionManager stores (packages/delivery/src/common/subscription_manager.py,
-packages/delivery/src/telegram/subscription_manager.py). One table serves all
-three channels, discriminated by `channel`.
-
-recipient_id is stored as text for all channels — Telegram's integer chat_id
-is stringified on write and parsed back to int at the Telegram call site
-(the only channel whose SDK requires an int chat_id to send a message).
+SubscriptionRow — mirrors packages/shared/src/db/models/subscription.py
+exactly (same table, same columns). This package doesn't run Alembic
+itself; the table is created by packages/shared's migrations. Keep the
+two files in sync.
 """
 from __future__ import annotations
 
@@ -28,13 +24,13 @@ class SubscriptionRow(Base):
     )
 
     id:            Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    channel:       Mapped[str] = mapped_column(String, nullable=False)   # "telegram" | "discord" | "line"
+    channel:       Mapped[str] = mapped_column(String, nullable=False)
     recipient_id:  Mapped[str] = mapped_column(String, nullable=False)
 
     min_confidence: Mapped[int] = mapped_column(Integer, nullable=False, default=60)
-    signal_types:   Mapped[list | None] = mapped_column(JSONB, nullable=True)  # None = all types
-    protocols:      Mapped[list | None] = mapped_column(JSONB, nullable=True)  # None = all protocols
-    chains:         Mapped[list | None] = mapped_column(JSONB, nullable=True)  # None = all chains
+    signal_types:   Mapped[list | None] = mapped_column(JSONB, nullable=True)
+    protocols:      Mapped[list | None] = mapped_column(JSONB, nullable=True)
+    chains:         Mapped[list | None] = mapped_column(JSONB, nullable=True)
     is_pro:         Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
 
     joined_at:       Mapped[datetime] = mapped_column(
@@ -45,7 +41,6 @@ class SubscriptionRow(Base):
     last_alert_date: Mapped[date | None] = mapped_column(Date, nullable=True)
 
     def can_receive(self, signal: dict) -> bool:
-        """Mirrors Subscription.can_receive from the in-memory implementation."""
         if signal.get("confidence", 0) < self.min_confidence:
             return False
         if self.signal_types and signal.get("signal_type") not in self.signal_types:

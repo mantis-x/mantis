@@ -1,111 +1,113 @@
 """
-SubscriptionManager — generic in-memory subscription store, shared by
-the LINE and Discord bots (Telegram keeps its own copy at
-src/telegram/subscription_manager.py).
+SubscriptionManager — Postgres-backed subscription store, shared by all
+three delivery channels (Telegram, Discord, LINE), discriminated by a
+`channel` constructor argument.
 
-Stores: {recipient_id: {min_confidence, signal_types, protocols}}
-Production: replace with Postgres subscriptions table.
+Previously: three near-identical in-memory implementations (this file, plus
+a parallel copy at src/telegram/subscription_manager.py) that reset to zero
+subscribers on every Railway redeploy. Now backed by the subscriptions
+table via src/db/connection.py — a local mirror of packages/shared/src/db
+(see that file's docstring for why it's a copy, not a shared import).
 
-Free tier: 3 alerts/day cap (tracked per recipient_id).
-Pro tier: unlimited (set by manually toggling is_pro).
-
-recipient_id is a str: a LINE userId or a Discord channel id.
+recipient_id is stored as text for every channel. Telegram's integer
+chat_id is stringified at its own thin wrapper (src/telegram/subscription_manager.py)
+so this class's public contract stays str-based for all three channels.
 """
 from __future__ import annotations
 
 import logging
-from datetime import datetime, date, timezone
 from dataclasses import dataclass, field
+from datetime import date, datetime, timezone
 from typing import Optional
 
 log = logging.getLogger(__name__)
 
-FREE_DAILY_LIMIT = 3
+from src.db.connection import get_session
+from src.db.models.subscription import SubscriptionRow, FREE_DAILY_LIMIT
 
 
 @dataclass
 class Subscription:
+    """Detached snapshot of a subscriptions-table row — safe after the session closes."""
     recipient_id:   str
-    min_confidence: int             = 60
-    signal_types:   Optional[set]   = None   # None = all types
-    protocols:      Optional[set]   = None   # None = all protocols
-    chains:         Optional[set]   = None   # None = all chains (mantle, arbitrum, …)
-    is_pro:         bool            = False
-    joined_at:      datetime        = field(
-        default_factory=lambda: datetime.now(tz=timezone.utc)
-    )
-    # Daily alert tracking
-    alerts_today:    int             = 0
-    last_alert_date: Optional[date]  = None
+    min_confidence: int = 60
+    signal_types:   Optional[set] = None
+    protocols:      Optional[set] = None
+    chains:         Optional[set] = None
+    is_pro:         bool = False
+    joined_at:      datetime = field(default_factory=lambda: datetime.now(tz=timezone.utc))
+    alerts_today:    int = 0
+    last_alert_date: Optional[date] = None
 
-    def can_receive(self, signal: dict) -> bool:
-        """Check if this subscriber should receive this signal."""
-        if signal.get("confidence", 0) < self.min_confidence:
-            return False
-        if self.signal_types and signal.get("signal_type") not in self.signal_types:
-            return False
-        if self.protocols and signal.get("protocol") not in self.protocols:
-            return False
-        if self.chains and signal.get("chain", "mantle") not in self.chains:
-            return False
-        if not self.is_pro:
-            today = datetime.now(tz=timezone.utc).date()
-            if self.last_alert_date != today:
-                self.alerts_today    = 0
-                self.last_alert_date = today
-            if self.alerts_today >= FREE_DAILY_LIMIT:
-                return False
-        return True
-
-    def record_alert(self) -> None:
-        """Increment daily alert counter."""
-        today = datetime.now(tz=timezone.utc).date()
-        if self.last_alert_date != today:
-            self.alerts_today    = 0
-            self.last_alert_date = today
-        self.alerts_today += 1
+    @classmethod
+    def _from_row(cls, row: SubscriptionRow) -> "Subscription":
+        return cls(
+            recipient_id    = row.recipient_id,
+            min_confidence  = row.min_confidence,
+            signal_types    = set(row.signal_types) if row.signal_types else None,
+            protocols       = set(row.protocols) if row.protocols else None,
+            chains          = set(row.chains) if row.chains else None,
+            is_pro          = row.is_pro,
+            joined_at       = row.joined_at,
+            alerts_today    = row.alerts_today,
+            last_alert_date = row.last_alert_date,
+        )
 
 
 class SubscriptionManager:
-    def __init__(self):
-        self._subs: dict[str, Subscription] = {}
-        self._signal_history: list[dict]    = []   # last 50 signals
+    """Postgres-backed subscriber store for one delivery channel."""
+
+    def __init__(self, channel: str):
+        self.channel = channel
+        self._signal_history: list[dict] = []  # last 50 signals — display cache only, not persisted
 
     def subscribe(self, recipient_id: str) -> bool:
         """Subscribe a recipient. Returns True if new, False if already subscribed."""
-        if recipient_id in self._subs:
-            return False
-        self._subs[recipient_id] = Subscription(recipient_id=recipient_id)
-        log.info("New subscriber: id=%s total=%d", recipient_id, len(self._subs))
-        return True
+        with get_session() as session:
+            existing = self._get_row(session, recipient_id)
+            if existing is not None:
+                return False
+            session.add(SubscriptionRow(channel=self.channel, recipient_id=str(recipient_id)))
+            log.info("New subscriber: channel=%s id=%s", self.channel, recipient_id)
+            return True
 
     def set_chains(self, recipient_id: str, chains: Optional[set]) -> bool:
         """Set chain filter for a subscriber. None = all chains. Returns False if not subscribed."""
-        sub = self._subs.get(recipient_id)
-        if sub is None:
-            return False
-        sub.chains = chains
-        log.info("Chain filter set: id=%s chains=%s", recipient_id, chains)
-        return True
+        with get_session() as session:
+            row = self._get_row(session, recipient_id)
+            if row is None:
+                return False
+            row.chains = list(chains) if chains else None
+            log.info("Chain filter set: channel=%s id=%s chains=%s", self.channel, recipient_id, chains)
+            return True
 
     def unsubscribe(self, recipient_id: str) -> bool:
         """Unsubscribe. Returns True if was subscribed."""
-        if recipient_id not in self._subs:
-            return False
-        del self._subs[recipient_id]
-        log.info("Unsubscribed: id=%s remaining=%d", recipient_id, len(self._subs))
-        return True
+        with get_session() as session:
+            row = self._get_row(session, recipient_id)
+            if row is None:
+                return False
+            session.delete(row)
+            log.info("Unsubscribed: channel=%s id=%s", self.channel, recipient_id)
+            return True
 
     def is_subscribed(self, recipient_id: str) -> bool:
-        return recipient_id in self._subs
+        with get_session() as session:
+            return self._get_row(session, recipient_id) is not None
 
     def get_subscribers(self, signal: dict) -> list[str]:
         """Return recipient_ids that should receive this signal."""
-        return [rid for rid, sub in self._subs.items() if sub.can_receive(signal)]
+        with get_session() as session:
+            rows = session.query(SubscriptionRow).filter(
+                SubscriptionRow.channel == self.channel
+            ).all()
+            return [row.recipient_id for row in rows if row.can_receive(signal)]
 
     def record_delivery(self, recipient_id: str) -> None:
-        if recipient_id in self._subs:
-            self._subs[recipient_id].record_alert()
+        with get_session() as session:
+            row = self._get_row(session, recipient_id)
+            if row is not None:
+                row.record_alert()
 
     def add_to_history(self, signal: dict) -> None:
         self._signal_history.insert(0, signal)
@@ -115,7 +117,18 @@ class SubscriptionManager:
         return self._signal_history[:limit]
 
     def subscriber_count(self) -> int:
-        return len(self._subs)
+        with get_session() as session:
+            return session.query(SubscriptionRow).filter(
+                SubscriptionRow.channel == self.channel
+            ).count()
 
     def get_subscription(self, recipient_id: str) -> Optional[Subscription]:
-        return self._subs.get(recipient_id)
+        with get_session() as session:
+            row = self._get_row(session, recipient_id)
+            return Subscription._from_row(row) if row else None
+
+    def _get_row(self, session, recipient_id: str) -> Optional[SubscriptionRow]:
+        return session.query(SubscriptionRow).filter(
+            SubscriptionRow.channel == self.channel,
+            SubscriptionRow.recipient_id == str(recipient_id),
+        ).one_or_none()
