@@ -7,8 +7,16 @@ calls Claude Sonnet for classification,
 pushes qualified signals to the delivery queue.
 
 Redis keys:
-  INPUT:  mantis:anomaly_candidates  (detection worker writes here)
-  OUTPUT: mantis:signals             (delivery worker reads here)
+  INPUT:   mantis:anomaly_candidates  (detection worker writes here)
+  OUTPUT:  mantis:signals             (delivery worker reads here — rolling
+                                       display log, capped at 1000, consumed
+                                       via BRPOP)
+  OUTPUT:  mantis:signals:exec        (executor worker reads here — a
+                                       separate FIFO queue so execution
+                                       and delivery each get their own
+                                       exclusive copy of every signal;
+                                       consuming one must never remove a
+                                       signal the other hasn't seen yet)
 """
 from __future__ import annotations
 
@@ -74,10 +82,22 @@ async def main() -> None:
 
             if signal:
                 signal_payload = json.dumps(signal.to_dict())
+
+                # Delivery's rolling display log — capped, consumed via BRPOP
                 await r.lpush("mantis:signals", signal_payload)
                 await r.ltrim("mantis:signals", 0, 999)
+
+                # Executor's independent FIFO queue — separate list so a
+                # slow/down executor can never cause delivery to skip a
+                # signal, and vice versa. Capped as a backpressure valve:
+                # if the executor is down long enough to queue 5000 signals,
+                # further arrivals are dropped rather than growing Redis
+                # memory unboundedly.
+                await r.rpush("mantis:signals:exec", signal_payload)
+                await r.ltrim("mantis:signals:exec", 0, 4999)
+
                 log.info(
-                    "📤 Signal queued for delivery: %s confidence=%d",
+                    "📤 Signal queued for delivery + execution: %s confidence=%d",
                     signal.signal_type.value, signal.confidence,
                 )
 

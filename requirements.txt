@@ -7,6 +7,7 @@ python-dotenv==1.0.1
 
 # Redis
 redis==5.0.4
+fakeredis==2.36.2   # in-memory Redis for queue/worker tests
 
 # Web3 / Blockchain
 web3==6.20.1

@@ -2,8 +2,13 @@
 Executor Worker — entry point for Mantis Execute (Track 6).
 Run: python -m src.worker (from packages/executor/)
 
-Listens on Redis mantis:signals (same queue as delivery worker),
-evaluates each signal against registered agent intent rules,
+Listens on Redis mantis:signals:exec — a dedicated FIFO queue populated
+by the enrichment worker (see packages/enrichment/src/worker.py), separate
+from mantis:signals which the delivery worker drains independently. Each
+worker gets its own exclusive copy of every signal, so slow/down execution
+can never cause delivery to miss a signal, and vice versa.
+
+Evaluates each signal against registered agent intent rules,
 and executes via Byreal Skills CLI when rules match.
 
 Every decision is logged to AgentIdentity.sol on Mantle.
@@ -56,23 +61,22 @@ async def main() -> None:
     import redis.asyncio as aioredis
     r = aioredis.from_url(redis_url, decode_responses=True)
 
-    log.info("Listening on Redis mantis:signals ...")
+    log.info("Listening on Redis mantis:signals:exec ...")
 
     processed = 0
     executed  = 0
 
     while True:
         try:
-            # Share the signal queue with the delivery worker
-            # Both consume independently — signals stay in list until both read
-            # In production use separate queues; for hackathon we use LRANGE
-            items = await r.lrange("mantis:signals", 0, 0)
-
-            if not items:
-                await asyncio.sleep(2)
+            # Atomic blocking pop — the returned item is guaranteed to be
+            # removed by this call, so there's no separate peek-then-delete
+            # step that could race with a concurrent push.
+            item = await r.blpop("mantis:signals:exec", timeout=5)
+            if item is None:
                 continue
 
-            signal = json.loads(items[0])
+            _, raw = item
+            signal = json.loads(raw)
             processed += 1
 
             results = executor.process_signal(signal)
@@ -101,9 +105,6 @@ async def main() -> None:
                     json.dumps(result.to_dict())
                 )
             await r.ltrim("mantis:executions", 0, 999)
-
-            # Remove processed signal (simple dequeue)
-            await r.lpop("mantis:signals")
 
             if processed % 5 == 0:
                 log.info(
