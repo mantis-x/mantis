@@ -26,6 +26,7 @@ from src.decoders.event_normaliser import (
     SWAP_TOPIC, UNIV3_SWAP_TOPIC, MINT_TOPIC, BURN_TOPIC, LB_SWAP_TOPIC,
 )
 from src.chains import ChainConfig
+from src.pricing import PriceOracle
 
 log = logging.getLogger(__name__)
 
@@ -50,9 +51,10 @@ class ChainCollector:
         if config.poa_middleware:
             self._w3.middleware_onion.inject(ExtraDataToPOAMiddleware, layer=0)
 
-        self._on_events  = on_events or self._default_handler
+        self._on_events    = on_events or self._default_handler
         self._last_block: int = 0
-        self._normaliser = EventNormaliser(config.pool_registry)
+        self._normaliser   = EventNormaliser(config.pool_registry)
+        self._price_oracle = PriceOracle(self._w3, config)
         self._seen: set[str] = set()
 
         if not self._w3.is_connected():
@@ -117,6 +119,8 @@ class ChainCollector:
             )
             return []
 
+        prices = self._price_oracle.get_prices()
+
         events = []
         for raw_log in raw_logs:
             block_num = (
@@ -126,7 +130,7 @@ class ChainCollector:
             )
             block_ts = self._get_block_timestamp(block_num)
             event = self._normaliser.normalise(
-                raw_log, block_ts, self._config.token_prices,
+                raw_log, block_ts, prices,
                 chain=self._config.name,
             )
             if event and event.unique_id not in self._seen:

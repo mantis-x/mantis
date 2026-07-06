@@ -50,6 +50,12 @@ class ChainConfig:
     native_token:         str
     pool_registry: dict = field(default_factory=dict, compare=False, hash=False)
     token_prices:  dict = field(default_factory=dict, compare=False, hash=False)
+    # price_key -> Chainlink AggregatorV3 feed address. Live-read at ingest
+    # time and overlaid onto token_prices; keys with no feed configured (or
+    # whose feed read fails) fall back to the static token_prices value.
+    # Only populate an entry here once the feed address is verified on-chain
+    # (get_code + description()) — do not add addresses from memory.
+    price_feeds:   dict = field(default_factory=dict, compare=False, hash=False)
 
     def rpc_url(self) -> str:
         return os.getenv(self.rpc_env, self.default_rpc)
@@ -98,6 +104,9 @@ MANTLE = ChainConfig(
         "usdc": 1.0,
         "meth": 2450.0,
     },
+    # No price_feeds entry: Chainlink has no verified official deployment on
+    # Mantle at time of writing. Signals here use the static prices above
+    # until a verified feed (or another oracle) is added.
 )
 
 
@@ -168,11 +177,22 @@ ARBITRUM = ChainConfig(
         "0x321f653eed006ad1c29d174e17d96351bde22649": PoolMeta("gmx"),  # GLP Manager
     },
     token_prices={
+        # Static fallback only — overridden at runtime by price_feeds below
+        # wherever a Chainlink feed is configured and reachable.
         "eth":  2400.0,
         "wbtc": 65000.0,
         "arb":  0.80,
         "usdt": 1.0,
         "usdc": 1.0,
+    },
+    price_feeds={
+        # Chainlink AggregatorV3 feeds on Arbitrum One — each verified via
+        # get_code() + description() before being added here.
+        "eth":  "0x639Fe6ab55C921f74e7fac1ee960C0B6293ba612",  # ETH / USD
+        "wbtc": "0x6ce185860a4963106506C203335A2910413708e9",  # BTC / USD
+        "arb":  "0xb2A824043730FE05F3DA2efaFa1CBbe83fa548D6",  # ARB / USD
+        "usdc": "0x50834F3163758fcC1Df9973b6e91f0F0F0434aD3",  # USDC / USD
+        "usdt": "0x3f3f5dF88dC9F13eac63DF89EC16ef6e7E25DdE7",  # USDT / USD
     },
 )
 
