@@ -17,11 +17,32 @@ from typing import Optional
 
 log = logging.getLogger(__name__)
 
-# Community blacklisted pools (rugpulls, exploited contracts)
-BLACKLISTED_POOLS: set[str] = {
-    # Add known bad actors here
+# Sentinel non-pool addresses that should never be a legitimate trade target.
+_SENTINEL_BAD_ADDRESSES: set[str] = {
     "0x0000000000000000000000000000000000000000",
+    "0x000000000000000000000000000000000000dead",  # common burn address
 }
+
+# Real, maintained blacklist entries go in BLACKLIST_POOLS (comma-separated
+# addresses) as an env var — e.g. from a security vendor feed or a manually
+# curated list of confirmed rugpulls/exploited contracts. There is no
+# hardcoded list of "known bad" addresses here: fabricating one from memory
+# would be worse than an honest, empty-but-configurable list, since a wrong
+# guess gives false confidence. This guard is a real no-op until an operator
+# populates BLACKLIST_POOLS.
+_env_blacklist = {
+    addr.strip().lower()
+    for addr in os.getenv("BLACKLIST_POOLS", "").split(",")
+    if addr.strip()
+}
+BLACKLISTED_POOLS: set[str] = _SENTINEL_BAD_ADDRESSES | _env_blacklist
+
+if not _env_blacklist:
+    log.warning(
+        "BLACKLIST_POOLS is empty — blacklist guard only blocks sentinel "
+        "burn/zero addresses. Populate BLACKLIST_POOLS with real flagged "
+        "pool addresses before relying on this guard in production."
+    )
 
 DEFAULT_MAX_POSITION_PCT = float(os.getenv("DEFAULT_MAX_POSITION_PCT", "5"))
 DEFAULT_MAX_SLIPPAGE_PCT = float(os.getenv("DEFAULT_MAX_SLIPPAGE_PCT", "2"))
@@ -43,12 +64,17 @@ class GuardRunner:
     Instantiate once, call check() for each ExecutionRequest.
     """
 
-    def check(self, request, wallet_balance_usd: float = 10_000.0) -> GuardResult:
+    def check(self, request, wallet_balance_usd: float) -> GuardResult:
         """
         Run all guards. Returns GuardResult — check .passed for outcome.
 
-        wallet_balance_usd: current wallet balance for position cap calculation.
-        In production this is fetched from the chain. Default 10K for testing.
+        wallet_balance_usd: the wallet's real, current USD balance for the
+        request's chain. No default is provided deliberately — a silent
+        fallback here previously let the position cap guard run against a
+        fictitious $10,000 regardless of actual funds, which meant it was
+        never really capping anything relative to the real wallet. Callers
+        must fetch the real on-chain balance (see Executor._wallet_balance_usd)
+        and pass it explicitly, or the guard fails closed at $0.
         """
         # 1. Position cap
         result = self._position_cap(request, wallet_balance_usd)

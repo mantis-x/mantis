@@ -75,6 +75,44 @@ def test_guard_result_bool():
     assert bool(GuardResult(False)) is False
 
 
+def test_burn_address_blocked():
+    """The common 0x...dEaD burn address is a sentinel — never a real pool."""
+    runner  = GuardRunner()
+    request = make_request(
+        pool_address="0x000000000000000000000000000000000000dEaD"
+    )
+    result  = runner.check(request, wallet_balance_usd=10_000.0)
+    assert not result.passed
+    assert result.guard == "blacklist"
+
+
+def test_blacklist_pools_env_var_extends_blacklist(monkeypatch):
+    """BLACKLIST_POOLS env var lets operators add real flagged addresses without a code change."""
+    flagged = "0xBadBadBadBadBadBadBadBadBadBadBadBadBad0"
+    monkeypatch.setenv("BLACKLIST_POOLS", flagged)
+
+    import importlib
+    from src.guards import guard_runner as guard_runner_module
+    importlib.reload(guard_runner_module)
+
+    runner  = guard_runner_module.GuardRunner()
+    request = make_request(pool_address=flagged)
+    result  = runner.check(request, wallet_balance_usd=10_000.0)
+    assert not result.passed
+    assert result.guard == "blacklist"
+
+    # Reload again without the env var so later tests see the clean module state
+    monkeypatch.delenv("BLACKLIST_POOLS", raising=False)
+    importlib.reload(guard_runner_module)
+
+
+def test_wallet_balance_usd_is_required_argument():
+    """check() must not silently default to a fictitious balance."""
+    import inspect
+    sig = inspect.signature(GuardRunner.check)
+    assert sig.parameters["wallet_balance_usd"].default is inspect.Parameter.empty
+
+
 if __name__ == "__main__":
     test_normal_request_passes_all_guards()
     test_position_cap_blocks_oversized_trade()

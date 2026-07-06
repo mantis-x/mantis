@@ -113,7 +113,8 @@ class Executor:
         """Run guards then execute via Byreal CLI."""
 
         # ── Guards ──────────────────────────────────────────────────────────
-        guard_result = self.guards.check(request)
+        wallet_balance_usd = self._wallet_balance_usd(request.chain)
+        guard_result = self.guards.check(request, wallet_balance_usd)
         if not guard_result:
             return ExecutionResult.aborted(
                 request,
@@ -176,6 +177,24 @@ class Executor:
             amount      = request.amount_usd,
             slippage    = request.max_slippage,
         )
+
+    def _wallet_balance_usd(self, chain: str) -> float:
+        """
+        Real USD wallet balance for the position cap guard, fetched per chain.
+        Returns 0.0 (fail closed) on any lookup failure — a guard computing
+        "5% of wallet" must never fall back to a guessed number, since that
+        silently defeats the whole purpose of the cap.
+        """
+        try:
+            if chain == "arbitrum":
+                return self.arb_executor.get_wallet_balance_usd()
+            return float(self.byreal.wallet_balance().get("balance_usd", 0.0))
+        except Exception as exc:
+            log.warning(
+                "Could not fetch wallet balance for chain=%s (%s) — "
+                "guard will fail closed at $0", chain, exc,
+            )
+            return 0.0
 
     def _do_add_liquidity(self, request: ExecutionRequest) -> dict:
         """Analyze pool then copy top farmer position."""

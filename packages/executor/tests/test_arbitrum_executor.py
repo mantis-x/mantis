@@ -358,6 +358,122 @@ class TestExecutorChainRouting:
         assert slippage == 0.005
 
 
+class TestExecutorWalletBalance:
+    """
+    Executor._wallet_balance_usd() must fetch the real per-chain balance
+    used by the position cap guard, never a fictitious placeholder.
+    """
+
+    def _make_executor(self):
+        from src.executor import Executor
+        with patch("src.executor.AgentRegistry"), \
+             patch("src.executor.ByrealCLIRunner"), \
+             patch("src.executor.ERC8004Logger"), \
+             patch("src.executor.ArbitrumSwapExecutor"):
+            ex = Executor.__new__(Executor)
+            ex.byreal       = MagicMock()
+            ex.arb_executor = MagicMock()
+            return ex
+
+    def test_arbitrum_chain_uses_arb_executor_balance(self):
+        ex = self._make_executor()
+        ex.arb_executor.get_wallet_balance_usd.return_value = 123.45
+        assert ex._wallet_balance_usd("arbitrum") == 123.45
+        ex.byreal.wallet_balance.assert_not_called()
+
+    def test_mantle_chain_uses_byreal_balance(self):
+        ex = self._make_executor()
+        ex.byreal.wallet_balance.return_value = {"balance_usd": 500.0}
+        assert ex._wallet_balance_usd("mantle") == 500.0
+        ex.arb_executor.get_wallet_balance_usd.assert_not_called()
+
+    def test_arbitrum_balance_lookup_failure_fails_closed(self):
+        ex = self._make_executor()
+        ex.arb_executor.get_wallet_balance_usd.side_effect = Exception("rpc down")
+        assert ex._wallet_balance_usd("arbitrum") == 0.0
+
+    def test_mantle_balance_lookup_failure_fails_closed(self):
+        ex = self._make_executor()
+        ex.byreal.wallet_balance.side_effect = Exception("cli error")
+        assert ex._wallet_balance_usd("mantle") == 0.0
+
+    def test_execute_passes_real_balance_to_guards(self):
+        """_execute() must call guards.check() with the fetched real balance, not a default."""
+        ex = self._make_executor()
+        ex.guards   = MagicMock()
+        ex.identity = MagicMock()
+        ex.arb_executor.get_wallet_balance_usd.return_value = 42.0
+        ex.arb_executor.swap.return_value = {"tx_hash": "0xabc"}
+        ex.guards.check.return_value = MagicMock(__bool__=lambda self: True)
+
+        request = make_request(chain="arbitrum", amount_usd=1.0)
+        ex._execute(request)
+
+        ex.guards.check.assert_called_once_with(request, 42.0)
+
+
+class TestArbitrumGetWalletBalanceUsd:
+    """ArbitrumSwapExecutor.get_wallet_balance_usd() — real balance for the guard."""
+
+    def _make_ready_executor(self, native_wei=0, weth_balance=0, usdc_balance=0, eth_price=2000.0):
+        executor = ArbitrumSwapExecutor.__new__(ArbitrumSwapExecutor)
+        executor._ready        = True
+        executor._default_weth = _MAINNET_WETH
+        executor._default_usdc = _MAINNET_USDC
+        executor._eth_price_cache    = eth_price
+        executor._eth_price_cache_ts = time.time()
+
+        mock_account = MagicMock()
+        mock_account.address = "0x1234"
+        executor._account = mock_account
+
+        mock_w3 = MagicMock()
+        mock_w3.eth.get_balance.return_value = native_wei
+
+        weth_contract = MagicMock()
+        weth_contract.functions.balanceOf.return_value.call.return_value = weth_balance
+        usdc_contract = MagicMock()
+        usdc_contract.functions.decimals.return_value.call.return_value = 6
+        usdc_contract.functions.balanceOf.return_value.call.return_value = usdc_balance
+
+        def contract_side_effect(address, abi):
+            if address.lower() == _MAINNET_WETH.lower():
+                return weth_contract
+            return usdc_contract
+        mock_w3.eth.contract.side_effect = contract_side_effect
+
+        from web3 import Web3
+        mock_w3.to_checksum_address = Web3.to_checksum_address
+        executor._w3 = mock_w3
+        executor._feed = MagicMock()  # unused since price cache is pre-warmed
+        return executor
+
+    def test_not_ready_returns_zero(self):
+        executor = ArbitrumSwapExecutor.__new__(ArbitrumSwapExecutor)
+        executor._ready = False
+        assert executor.get_wallet_balance_usd() == 0.0
+
+    def test_sums_native_weth_and_usdc(self):
+        executor = self._make_ready_executor(
+            native_wei=int(0.01 * 10**18),   # 0.01 ETH
+            weth_balance=int(0.02 * 10**18), # 0.02 WETH
+            usdc_balance=50 * 10**6,         # 50 USDC
+            eth_price=2000.0,
+        )
+        total = executor.get_wallet_balance_usd()
+        # 0.01 ETH + 0.02 WETH = 0.03 ETH @ $2000 = $60, plus $50 USDC = $110
+        assert abs(total - 110.0) < 0.01
+
+    def test_zero_balances_returns_zero(self):
+        executor = self._make_ready_executor()
+        assert executor.get_wallet_balance_usd() == 0.0
+
+    def test_balance_read_failure_fails_closed(self):
+        executor = self._make_ready_executor()
+        executor._w3.eth.get_balance.side_effect = Exception("rpc down")
+        assert executor.get_wallet_balance_usd() == 0.0
+
+
 # ── Guard pipeline with Arbitrum requests ─────────────────────────────────────
 
 class TestGuardPipelineArbitrum:
@@ -367,19 +483,36 @@ class TestGuardPipelineArbitrum:
         from src.guards.guard_runner import GuardRunner
         runner  = GuardRunner()
         request = make_request(chain="arbitrum", amount_usd=99999.0)
-        result  = runner.check(request)
+        result  = runner.check(request, wallet_balance_usd=10_000.0)
         assert not result  # should be blocked by position cap
 
     def test_normal_arbitrum_request_passes_guards(self):
         from src.guards.guard_runner import GuardRunner
         runner  = GuardRunner()
         request = make_request(chain="arbitrum", amount_usd=100.0)
-        result  = runner.check(request)
+        result  = runner.check(request, wallet_balance_usd=10_000.0)
         assert result  # should pass
 
     def test_slippage_guard_applies_to_arbitrum(self):
         from src.guards.guard_runner import GuardRunner
         runner  = GuardRunner()
         request = make_request(chain="arbitrum", max_slippage=0.99)
-        result  = runner.check(request)
+        result  = runner.check(request, wallet_balance_usd=10_000.0)
         assert not result  # slippage too high
+
+    def test_position_cap_reflects_real_low_balance(self):
+        """A small real wallet balance must cap trades much smaller than $10k would."""
+        from src.guards.guard_runner import GuardRunner
+        runner  = GuardRunner()
+        # $50 wallet, 5% cap -> max $2.50; a $10 request must be blocked
+        request = make_request(chain="arbitrum", amount_usd=10.0, max_position=5.0)
+        result  = runner.check(request, wallet_balance_usd=50.0)
+        assert not result
+
+    def test_position_cap_fails_closed_at_zero_balance(self):
+        """If the real balance can't be determined (0.0), no trade should pass."""
+        from src.guards.guard_runner import GuardRunner
+        runner  = GuardRunner()
+        request = make_request(chain="arbitrum", amount_usd=1.0)
+        result  = runner.check(request, wallet_balance_usd=0.0)
+        assert not result

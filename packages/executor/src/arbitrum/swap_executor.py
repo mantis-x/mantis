@@ -294,6 +294,53 @@ class ArbitrumSwapExecutor:
     def is_ready(self) -> bool:
         return self._ready
 
+    def get_wallet_balance_usd(self) -> float:
+        """
+        Real USD value of the wallet's holdings in the tokens this executor
+        actually trades: native ETH, WETH, and USDC. Used by the position
+        cap guard — must reflect real funds, not a placeholder, since the
+        guard computes max trade size as a percentage of this number.
+
+        Returns 0.0 (fail closed) if the executor isn't ready or any balance
+        read fails, rather than guessing — a guard that can't verify the
+        real balance must not silently allow a trade sized against a
+        fictitious one.
+        """
+        if not self._ready:
+            log.warning(
+                "get_wallet_balance_usd: executor not ready — returning $0 "
+                "(fail closed) rather than a guessed balance"
+            )
+            return 0.0
+
+        from web3 import Web3
+        try:
+            eth_price = self._get_eth_price_usd()
+
+            native_wei = self._w3.eth.get_balance(self._account.address)
+            native_usd = (native_wei / 10**18) * eth_price
+
+            weth_c = self._w3.eth.contract(
+                address=Web3.to_checksum_address(self._default_weth), abi=_ERC20_ABI
+            )
+            weth_balance = weth_c.functions.balanceOf(self._account.address).call()
+            weth_usd = (weth_balance / 10**18) * eth_price
+
+            usdc_c = self._w3.eth.contract(
+                address=Web3.to_checksum_address(self._default_usdc), abi=_ERC20_ABI
+            )
+            usdc_decimals = usdc_c.functions.decimals().call()
+            usdc_balance  = usdc_c.functions.balanceOf(self._account.address).call()
+            usdc_usd = usdc_balance / (10**usdc_decimals)
+
+            return native_usd + weth_usd + usdc_usd
+        except Exception as exc:
+            log.warning(
+                "get_wallet_balance_usd: balance read failed (%s) — "
+                "returning $0 (fail closed)", exc,
+            )
+            return 0.0
+
     # ── Internal ───────────────────────────────────────────────────────────────
 
     def _simulate(self, params: tuple, amount_in: int, amount_usd: float) -> dict:
