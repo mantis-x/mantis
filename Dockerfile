@@ -19,4 +19,10 @@ COPY packages/ packages/
 # Supervisord config
 COPY supervisord.conf /etc/supervisor/conf.d/supervisord.conf
 
-CMD ["/usr/bin/supervisord", "-c", "/etc/supervisor/conf.d/supervisord.conf"]
+# Entrypoint: wait for Postgres, run Alembic migrations, then start supervisord.
+# Keeps "deploy" and "migrate" as one step so a schema change can't ship
+# without the migration that makes it work.
+COPY docker-entrypoint.sh /app/docker-entrypoint.sh
+RUN chmod +x /app/docker-entrypoint.sh
+
+CMD ["/app/docker-entrypoint.sh"]
