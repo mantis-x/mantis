@@ -286,10 +286,15 @@ class ArbitrumSwapExecutor:
             0,  # sqrtPriceLimitX96 = 0 (no limit)
         )
 
+        execution_price = self._resolve_execution_price(token_in_c, token_out_c)
+
         if self._dry_run:
-            return self._simulate(params, amount_in, amount_usd)
+            return self._simulate(params, amount_in, amount_usd, execution_price)
         else:
-            return self._execute(params, token_in_contract, token_in_c, router_c, amount_in, amount_usd)
+            return self._execute(
+                params, token_in_contract, token_in_c, router_c,
+                amount_in, amount_usd, execution_price,
+            )
 
     def is_ready(self) -> bool:
         return self._ready
@@ -343,7 +348,25 @@ class ArbitrumSwapExecutor:
 
     # ── Internal ───────────────────────────────────────────────────────────────
 
-    def _simulate(self, params: tuple, amount_in: int, amount_usd: float) -> dict:
+    def _resolve_execution_price(self, token_in_c: str, token_out_c: str) -> float | None:
+        """
+        USD price of whichever leg is WETH, at the moment of execution — an
+        oracle snapshot (same Chainlink feed already used for sizing), not
+        a computed fill price. This makes it directly comparable to
+        SignalOutcomeTracker's entry_price_usd, which is the same kind of
+        oracle snapshot rather than an on-chain fill price. Returns None
+        for a stablecoin/stablecoin swap or an unrecognized pair, where a
+        single "price" isn't a meaningful concept.
+        """
+        weth = self._default_weth.lower()
+        if token_in_c.lower() == weth or token_out_c.lower() == weth:
+            return self._get_eth_price_usd()
+        return None
+
+    def _simulate(
+        self, params: tuple, amount_in: int, amount_usd: float,
+        execution_price: float | None = None,
+    ) -> dict:
         """Simulate via call() — no gas spent, returns quoted amountOut."""
         try:
             amount_out = self._router.functions.exactInputSingle(params).call(
@@ -356,12 +379,13 @@ class ArbitrumSwapExecutor:
 
         synthetic_hash = f"dry_run_arb_{int(time.time())}_{amount_in}"
         return {
-            "tx_hash":   synthetic_hash,
-            "amount_in": amount_in,
+            "tx_hash":    synthetic_hash,
+            "amount_in":  amount_in,
             "amount_out": amount_out,
             "gas_used":   0,
             "simulated":  True,
             "amount_usd": amount_usd,
+            "execution_price": execution_price,
         }
 
     def _execute(
@@ -372,6 +396,7 @@ class ArbitrumSwapExecutor:
         router_c:           str,
         amount_in:          int,
         amount_usd:         float,
+        execution_price:    float | None = None,
     ) -> dict:
         """Send real transaction. Approves router first if needed."""
         w3      = self._w3
@@ -416,6 +441,7 @@ class ArbitrumSwapExecutor:
             "gas_used":   receipt["gasUsed"],
             "simulated":  False,
             "amount_usd": amount_usd,
+            "execution_price": execution_price,
         }
 
     def _approve(self, token_contract, spender: str, amount: int) -> None:
@@ -506,4 +532,5 @@ class ArbitrumSwapExecutor:
             "gas_used":   0,
             "simulated":  True,
             "amount_usd": amount_usd,
+            "execution_price": None,
         }

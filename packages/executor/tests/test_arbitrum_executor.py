@@ -143,6 +143,8 @@ class TestArbitrumSwapExecutorDryRunWithMockedW3:
         executor._router_addr = _MAINNET_WETH  # dummy
         executor._default_weth= _MAINNET_WETH
         executor._default_usdc= _MAINNET_USDC
+        executor._eth_price_cache    = 2400.0
+        executor._eth_price_cache_ts = time.time()
 
         # Mock router contract
         mock_router = MagicMock()
@@ -189,6 +191,50 @@ class TestArbitrumSwapExecutorDryRunWithMockedW3:
         assert result["simulated"] is True
         assert result["amount_out"] == 0
 
+    def test_execution_price_populated_for_weth_leg(self):
+        executor = self._make_ready_executor()
+        result = executor.swap(_MAINNET_USDC, _MAINNET_WETH, 5.0)
+        assert result["execution_price"] == 2400.0
+
+    def test_execution_price_matches_regardless_of_leg_order(self):
+        """Same price whether WETH is token_in or token_out — it's one oracle snapshot."""
+        executor = self._make_ready_executor()
+        result = executor.swap(_MAINNET_WETH, _MAINNET_USDC, 5.0)
+        assert result["execution_price"] == 2400.0
+
+
+class TestResolveExecutionPrice:
+    """ArbitrumSwapExecutor._resolve_execution_price() in isolation."""
+
+    def _make_executor_with_price(self, price=2400.0):
+        executor = ArbitrumSwapExecutor.__new__(ArbitrumSwapExecutor)
+        executor._default_weth = _MAINNET_WETH
+        executor._eth_price_cache    = price
+        executor._eth_price_cache_ts = time.time()
+        executor._feed = MagicMock()
+        return executor
+
+    def test_returns_price_when_token_in_is_weth(self):
+        executor = self._make_executor_with_price(2400.0)
+        price = executor._resolve_execution_price(_MAINNET_WETH, _MAINNET_USDC)
+        assert price == 2400.0
+
+    def test_returns_price_when_token_out_is_weth(self):
+        executor = self._make_executor_with_price(2400.0)
+        price = executor._resolve_execution_price(_MAINNET_USDC, _MAINNET_WETH)
+        assert price == 2400.0
+
+    def test_returns_none_for_stablecoin_to_stablecoin(self):
+        executor = self._make_executor_with_price(2400.0)
+        usdt = "0xFd086bC7CD5C481DCC9C85ebE478A1C0b69FCbb9"
+        price = executor._resolve_execution_price(_MAINNET_USDC, usdt)
+        assert price is None
+
+    def test_case_insensitive_weth_match(self):
+        executor = self._make_executor_with_price(2400.0)
+        price = executor._resolve_execution_price(_MAINNET_WETH.upper(), _MAINNET_USDC)
+        assert price == 2400.0
+
 
 class TestArbitrumSwapExecutorLiveModeSlippage:
     """
@@ -203,6 +249,8 @@ class TestArbitrumSwapExecutorLiveModeSlippage:
         executor._router_addr  = _MAINNET_WETH  # dummy
         executor._default_weth = _MAINNET_WETH
         executor._default_usdc = _MAINNET_USDC
+        executor._eth_price_cache    = 2400.0
+        executor._eth_price_cache_ts = time.time()
 
         mock_quoter = MagicMock()
         mock_quoter.functions.quoteExactInputSingle.return_value.call.return_value = (
