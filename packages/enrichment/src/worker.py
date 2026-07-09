@@ -55,7 +55,7 @@ async def main() -> None:
 
     try:
         enricher = Enricher()
-        log.info("Enricher ready — model=claude-sonnet-4-20250514")
+        log.info("Enricher ready — model=claude-sonnet-5")
     except ValueError as e:
         log.error("%s", e)
         return
