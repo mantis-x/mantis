@@ -197,11 +197,64 @@ ARBITRUM = ChainConfig(
 )
 
 
+# ── HashKey Chain ────────────────────────────────────────────────────────────
+#
+# Verified live 2026-07-09: RPC (chain_id=177, ~2s blocks), explorer
+# (https://explorer.hsk.xyz redirects to a real Blockscout instance at
+# hsk.blockscout.com, confirmed via its own /api/v2/stats), and — critically
+# — signal source: searched the last several thousand blocks for the
+# canonical Uniswap V3, Uniswap V2, and Liquidity Book Swap topics and found
+# zero events of any of them, on a chain otherwise doing ~45k tx/day. No DEX
+# with meaningful volume exists here yet. Token transfer-flow monitoring
+# (large ERC-20 movements) is the signal source instead — see
+# Protocol.HASHKEY_FLOWS / EventType.TRANSFER in models/raw_event.py. This
+# also fits the compliance/institutional-flow narrative better than DEX
+# swap "alpha" for a compliance-first chain's judges/users.
+#
+# Token addresses below were read directly from Blockscout's token list
+# (api/v2/tokens) and cross-checked for real recent Transfer activity —
+# not from memory.
+
+_HSK_USDT = TokenMeta("0xf1b50ed67a9e2cc94ad3c477779e2d4cbfff9029", "usdt", 6)
+_HSK_WETH = TokenMeta("0xefd4bc9afd210517803f293ababd701caeecdfd0", "weth", 18)
+_HSK_WHSK = TokenMeta("0xb210d2120d57b758ee163cffb43e73728c471cf1", "hsk", 18)
+
+HASHKEY = ChainConfig(
+    name="hashkey",
+    chain_id=177,
+    rpc_env="HASHKEY_RPC_URL",
+    default_rpc="https://mainnet.hsk.xyz",
+    explorer_base="https://hsk.blockscout.com",
+    poa_middleware=False,   # OP-stack; confirmed empty extraData on live blocks
+    poll_interval_s=10,     # ~2s blocks — poll more often than Mantle's 15s
+    max_blocks_per_batch=200,
+    native_token="hsk",
+    pool_registry={
+        # Not liquidity pools — each entry is a token contract monitored
+        # for large Transfer events. token0 carries that token's own
+        # decimals/price_key (there's no second leg for a transfer).
+        "0xf1b50ed67a9e2cc94ad3c477779e2d4cbfff9029": PoolMeta("hashkey_flows", token0=_HSK_USDT),
+        "0xefd4bc9afd210517803f293ababd701caeecdfd0": PoolMeta("hashkey_flows", token0=_HSK_WETH),
+        "0xb210d2120d57b758ee163cffb43e73728c471cf1": PoolMeta("hashkey_flows", token0=_HSK_WHSK),
+    },
+    token_prices={
+        # Static fallback — no verified Chainlink deployment found on
+        # HashKey Chain yet, so unlike Arbitrum this has no price_feeds
+        # overlay. HSK spot checked live via CoinGecko 2026-07-09 (~$0.081);
+        # revisit before relying on this for real sizing decisions.
+        "hsk":  0.081,
+        "usdt": 1.0,
+        "weth": 2400.0,
+    },
+)
+
+
 # ── Registry ──────────────────────────────────────────────────────────────────
 
 ALL_CHAINS: dict[str, ChainConfig] = {
     "mantle":   MANTLE,
     "arbitrum": ARBITRUM,
+    "hashkey":  HASHKEY,
 }
 
 

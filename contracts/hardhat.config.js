@@ -41,5 +41,16 @@ module.exports = {
         ? [process.env.DEPLOYER_PRIVATE_KEY]
         : [],
     },
+    // HashKey Chain — OP-stack L2, chain_id/RPC verified live 2026-07-09.
+    // No testnet entry: the doc-provided testnet RPC
+    // (hashkeychain-testnet.alt.technology) doesn't resolve, and the
+    // hackathon requires mainnet deployment anyway.
+    hashkey: {
+      url: process.env.HASHKEY_RPC_URL || "https://mainnet.hsk.xyz",
+      chainId: 177,
+      accounts: process.env.DEPLOYER_PRIVATE_KEY
+        ? [process.env.DEPLOYER_PRIVATE_KEY]
+        : [],
+    },
   },
 };

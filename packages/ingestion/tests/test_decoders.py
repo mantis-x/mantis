@@ -24,6 +24,7 @@ from src.decoders.event_normaliser import (
     GMX_SWAP_TOPIC,
     GMX_INCREASE_POSITION_TOPIC,
     GMX_DECREASE_POSITION_TOPIC,
+    TRANSFER_TOPIC,
     _estimate_usd,
     _estimate_gmx_usd,
 )
@@ -532,3 +533,173 @@ class TestGMXTopicRouting:
         norm = EventNormaliser(_GMX_REGISTRY)
         log = _make_log("0x" + "cc" * 32, "0x", _GMX_VAULT)
         assert norm.normalise(log, 0, ARBITRUM_PRICES) is None
+
+
+# ── ERC-20 Transfer (HashKey Chain flow monitoring) ───────────────────────────
+
+def _transfer_data(value: int) -> str:
+    from eth_abi import encode
+    return _hex(encode(["uint256"], [value]))
+
+
+_HSK_USDT_ADDR = "0xf1b50ed67a9e2cc94ad3c477779e2d4cbfff9029"
+_HSK_WETH_ADDR = "0xefd4bc9afd210517803f293ababd701caeecdfd0"
+FROM_ADDR = _addr_topic("0x" + "11" * 20)
+TO_ADDR   = _addr_topic("0x" + "22" * 20)
+
+_HASHKEY_USDT = TokenMeta(_HSK_USDT_ADDR, "usdt", 6)
+_HASHKEY_WETH = TokenMeta(_HSK_WETH_ADDR, "weth", 18)
+
+HASHKEY_REGISTRY = {
+    _HSK_USDT_ADDR: PoolMeta("hashkey_flows", token0=_HASHKEY_USDT),
+    _HSK_WETH_ADDR: PoolMeta("hashkey_flows", token0=_HASHKEY_WETH),
+}
+HASHKEY_PRICES = {"usdt": 1.0, "weth": 2400.0, "hsk": 0.081}
+
+
+class TestTokenTransferDecode:
+    def _make_event(self, token_addr, value, price_dict=None):
+        norm = EventNormaliser(HASHKEY_REGISTRY)
+        data = _transfer_data(value)
+        log = _make_log(TRANSFER_TOPIC, data, token_addr, topic1=FROM_ADDR, topic2=TO_ADDR)
+        return norm.normalise(log, 1_700_000_000, price_dict or HASHKEY_PRICES, chain="hashkey")
+
+    def test_returns_event(self):
+        event = self._make_event(_HSK_USDT_ADDR, 50 * 10**6)
+        assert event is not None
+
+    def test_protocol_is_hashkey_flows(self):
+        event = self._make_event(_HSK_USDT_ADDR, 50 * 10**6)
+        assert event.protocol == Protocol.HASHKEY_FLOWS
+
+    def test_event_type_is_transfer(self):
+        event = self._make_event(_HSK_USDT_ADDR, 50 * 10**6)
+        assert event.event_type == EventType.TRANSFER
+
+    def test_chain_is_hashkey(self):
+        event = self._make_event(_HSK_USDT_ADDR, 50 * 10**6)
+        assert event.chain == "hashkey"
+
+    def test_wallet_address_is_sender(self):
+        event = self._make_event(_HSK_USDT_ADDR, 50 * 10**6)
+        assert event.wallet_address == "0x" + "11" * 20
+
+    def test_usd_from_usdt_transfer(self):
+        # 50 USDT @ $1 = $50
+        event = self._make_event(_HSK_USDT_ADDR, 50 * 10**6)
+        assert abs(event.amount_usd - 50.0) < 0.01
+
+    def test_usd_from_weth_transfer(self):
+        # 0.01 WETH @ $2400 = $24
+        event = self._make_event(_HSK_WETH_ADDR, int(0.01 * 10**18))
+        assert abs(event.amount_usd - 24.0) < 0.01
+
+    def test_amount_in_raw_value_preserved(self):
+        event = self._make_event(_HSK_USDT_ADDR, 50 * 10**6)
+        assert event.amount_in == 50 * 10**6
+
+    def test_zero_value_transfer(self):
+        event = self._make_event(_HSK_USDT_ADDR, 0)
+        assert event is not None
+        assert event.amount_usd == 0.0
+
+    def test_no_token_meta_gives_zero_usd(self):
+        no_meta_registry = {_HSK_USDT_ADDR: PoolMeta("hashkey_flows")}  # token0=None
+        norm = EventNormaliser(no_meta_registry)
+        log = _make_log(TRANSFER_TOPIC, _transfer_data(50 * 10**6), _HSK_USDT_ADDR,
+                        topic1=FROM_ADDR, topic2=TO_ADDR)
+        event = norm.normalise(log, 0, HASHKEY_PRICES, chain="hashkey")
+        assert event is not None
+        assert event.amount_usd == 0.0
+
+    def test_missing_topics_returns_none(self):
+        norm = EventNormaliser(HASHKEY_REGISTRY)
+        log = _make_log(TRANSFER_TOPIC, _transfer_data(50 * 10**6), _HSK_USDT_ADDR, topic1=FROM_ADDR)
+        assert norm.normalise(log, 0, HASHKEY_PRICES, chain="hashkey") is None
+
+    def test_transfer_topic_routes_correctly(self):
+        norm = EventNormaliser(HASHKEY_REGISTRY)
+        log = _make_log(TRANSFER_TOPIC, _transfer_data(100 * 10**6), _HSK_USDT_ADDR,
+                        topic1=FROM_ADDR, topic2=TO_ADDR)
+        event = norm.normalise(log, 0, HASHKEY_PRICES, chain="hashkey")
+        assert event is not None and event.event_type == EventType.TRANSFER
+
+    def test_unique_id_includes_hashkey_chain(self):
+        event = self._make_event(_HSK_USDT_ADDR, 50 * 10**6)
+        assert event.unique_id.startswith("hashkey:")
+
+
+# ── Regression: decoders must handle real web3.py HexBytes, not just str ─────
+#
+# w3.eth.get_logs() returns "data" and "topics" as HexBytes (a bytes
+# subclass), never plain str. Every decoder in this file used to call
+# log_["data"].startswith("0x") unconditionally — bytes.startswith rejects a
+# str argument, so this raised TypeError on every real log, silently
+# swallowed by normalise()'s try/except. No decoder had ever successfully
+# parsed a real on-chain event; only these tests' plain-string _make_log
+# data passed. These tests build logs with genuine HexBytes fields (as
+# eth_getLogs actually returns) to make sure that can't regress silently.
+
+class TestHexBytesRealWorldShape:
+    def _hexbytes_log(self, topic0: str, data_hex: str, address: str,
+                      topic1: str = None, topic2: str = None) -> dict:
+        from hexbytes import HexBytes
+        topics = [HexBytes(topic0)]
+        if topic1:
+            topics.append(HexBytes(topic1))
+        if topic2:
+            topics.append(HexBytes(topic2))
+        return {
+            "address":         address,
+            "topics":          topics,
+            "data":            HexBytes(data_hex),
+            "blockNumber":     256,
+            "transactionHash": HexBytes("0x" + "ab" * 32),
+            "logIndex":        0,
+        }
+
+    def test_univ3_swap_decodes_with_hexbytes_data(self):
+        norm = EventNormaliser(ARBITRUM_REGISTRY)
+        data = _univ3_swap_data(10**18, -(2400 * 10**6))
+        log = self._hexbytes_log(UNIV3_SWAP_TOPIC, data, POOL_ARBITRUM,
+                                 topic1=SENDER, topic2=SENDER)
+        event = norm.normalise(log, 0, ARBITRUM_PRICES, chain="arbitrum")
+        assert event is not None
+        assert event.event_type == EventType.SWAP
+
+    def test_agni_swap_decodes_with_hexbytes_data(self):
+        norm = EventNormaliser(MANTLE_REGISTRY)
+        data = _agni_swap_data(10**18, -(10**18))
+        log = self._hexbytes_log(SWAP_TOPIC, data, POOL_MANTLE, topic1=SENDER)
+        event = norm.normalise(log, 0, MANTLE_PRICES, chain="mantle")
+        assert event is not None
+        assert event.event_type == EventType.SWAP
+
+    def test_gmx_swap_decodes_with_hexbytes_data(self):
+        norm = EventNormaliser(_GMX_REGISTRY)
+        data = _gmx_swap_data(
+            "0x" + "aa" * 20, _GMX_WETH, _GMX_USDCe,
+            10**18, 2400 * 10**6, 2400 * 10**6, 30,
+        )
+        log = self._hexbytes_log(GMX_SWAP_TOPIC, data, _GMX_VAULT)
+        event = norm.normalise(log, 0, ARBITRUM_PRICES, chain="arbitrum")
+        assert event is not None
+        assert event.event_type == EventType.SWAP
+
+    def test_token_transfer_decodes_with_hexbytes_data(self):
+        norm = EventNormaliser(HASHKEY_REGISTRY)
+        data = _transfer_data(50 * 10**6)
+        log = self._hexbytes_log(TRANSFER_TOPIC, data, _HSK_USDT_ADDR,
+                                 topic1=FROM_ADDR, topic2=TO_ADDR)
+        event = norm.normalise(log, 0, HASHKEY_PRICES, chain="hashkey")
+        assert event is not None
+        assert event.event_type == EventType.TRANSFER
+        assert abs(event.amount_usd - 50.0) < 0.01
+
+    def test_mint_decodes_with_hexbytes_data(self):
+        norm = EventNormaliser(MANTLE_REGISTRY)
+        data = _mint_data(500 * 10**18, 300 * 10**18)
+        log = self._hexbytes_log(MINT_TOPIC, data, POOL_MANTLE, topic1=SENDER)
+        event = norm.normalise(log, 0, MANTLE_PRICES, chain="mantle")
+        assert event is not None
+        assert event.event_type == EventType.MINT

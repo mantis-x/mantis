@@ -49,6 +49,12 @@ GMX_DECREASE_POSITION_TOPIC = "0x93d75d64d1f84fc6f430a64fc578bdd4c1e090e90ea2d51
 # GMX V1 stores sizeDelta and collateralDelta in USD × 10^30
 _GMX_USD_PRECISION = 10 ** 30
 
+# Standard ERC-20 Transfer — keccak256("Transfer(address,address,uint256)")
+# Used for HashKey Chain flow monitoring: no DEX with meaningful swap volume
+# was found at launch, so large token movements between wallets are the
+# signal source instead (see Protocol.HASHKEY_FLOWS).
+TRANSFER_TOPIC = "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef"
+
 
 class EventNormaliser:
     """
@@ -121,6 +127,10 @@ class EventNormaliser:
                 return self._decode_gmx_position(
                     raw_log, pool_meta, address, block_timestamp, chain, is_increase=False
                 )
+            elif topic0 == TRANSFER_TOPIC:
+                return self._decode_token_transfer(
+                    raw_log, pool_meta, address, block_timestamp, token_prices, chain
+                )
         except Exception as exc:
             log.debug("Decode error [%s %s]: %s", pool_meta.protocol, topic0[:10], exc)
 
@@ -136,7 +146,7 @@ class EventNormaliser:
         from src.models.raw_event import EventType, Protocol
         from datetime import datetime, timezone
 
-        data = bytes.fromhex(log_["data"][2:] if log_["data"].startswith("0x") else log_["data"])
+        data = _log_data(log_)
         # Agni Swap(sender, recipient, int256 amount0, int256 amount1,
         #           uint160 sqrtPriceX96, uint128 liquidity, int24 tick,
         #           uint128 protocolFeesToken0, uint128 protocolFeesToken1)
@@ -178,7 +188,7 @@ class EventNormaliser:
         from src.models.raw_event import EventType, Protocol
         from datetime import datetime, timezone
 
-        data = bytes.fromhex(log_["data"][2:] if log_["data"].startswith("0x") else log_["data"])
+        data = _log_data(log_)
         # Canonical Uniswap V3 Swap(address sender, address recipient,
         #                           int256 amount0, int256 amount1,
         #                           uint160 sqrtPriceX96, uint128 liquidity, int24 tick)
@@ -219,7 +229,7 @@ class EventNormaliser:
         from eth_abi import decode
         from src.models.raw_event import EventType, Protocol
 
-        data = bytes.fromhex(log_["data"][2:] if log_["data"].startswith("0x") else log_["data"])
+        data = _log_data(log_)
         decoded = decode(["address", "uint128", "uint256", "uint256"], data)
         amount0, amount1 = decoded[2], decoded[3]
         amount_usd = _estimate_usd(amount0, amount1, pool_meta, prices)
@@ -248,7 +258,7 @@ class EventNormaliser:
         from eth_abi import decode
         from src.models.raw_event import EventType, Protocol
 
-        data = bytes.fromhex(log_["data"][2:] if log_["data"].startswith("0x") else log_["data"])
+        data = _log_data(log_)
         decoded = decode(["uint128", "uint256", "uint256"], data)
         amount0, amount1 = decoded[1], decoded[2]
         amount_usd = _estimate_usd(amount0, amount1, pool_meta, prices)
@@ -287,7 +297,7 @@ class EventNormaliser:
         from eth_abi import decode
         from src.models.raw_event import EventType, Protocol
 
-        data = bytes.fromhex(log_["data"][2:] if log_["data"].startswith("0x") else log_["data"])
+        data = _log_data(log_)
         decoded = decode(
             ["address", "address", "address", "uint256", "uint256", "uint256", "uint256"],
             data,
@@ -330,7 +340,7 @@ class EventNormaliser:
         from eth_abi import decode
         from src.models.raw_event import EventType, Protocol
 
-        data = bytes.fromhex(log_["data"][2:] if log_["data"].startswith("0x") else log_["data"])
+        data = _log_data(log_)
         decoded = decode(
             ["bytes32", "address", "address", "address",
              "uint256", "uint256", "bool", "uint256", "uint256"],
@@ -377,6 +387,62 @@ class EventNormaliser:
             wallet_address = sender,
             event_type     = EventType.SWAP,
             amount_usd     = 0.0,   # enriched by price oracle later
+            timestamp      = _ts(ts),
+        )
+
+    # ── ERC-20 Transfer (HashKey Chain flow monitoring) ───────────────────────
+
+    def _decode_token_transfer(
+        self, log_: dict, pool_meta: PoolMeta, pool: str,
+        ts: int, prices: dict, chain: str = "hashkey",
+    ) -> Optional[NormalisedEvent]:
+        """
+        Standard ERC-20 Transfer(address indexed from, address indexed to,
+        uint256 value). from/to are indexed (topics[1]/topics[2]); value is
+        the sole (non-indexed) data field.
+
+        wallet_address is the sender (from) — the party moving funds out,
+        consistent with every other decoder in this file tracking a single
+        primary actor. The recipient (to) isn't captured: NormalisedEvent's
+        token_in/token_out fields are for token contract addresses, and
+        reusing them for a wallet address here would be misleading to
+        anyone reading a decoded event later — not worth it for a field
+        that's dropped before reaching the Redis queue anyway (see
+        ingestion/src/worker.py's payload, which doesn't forward token_in/
+        token_out). pool_meta.token0 carries the monitored token's
+        decimals/price_key (there's no "pair" here — pool_address is just
+        the token contract itself).
+        """
+        from eth_abi import decode
+        from src.models.raw_event import EventType, Protocol
+
+        topics = log_.get("topics", [])
+        if len(topics) < 3:
+            return None
+
+        sender = "0x" + (topics[1].hex() if isinstance(topics[1], bytes) else topics[1])[-40:]
+
+        data = _log_data(log_)
+        (value,) = decode(["uint256"], data)
+
+        amount_usd = 0.0
+        if pool_meta.token0:
+            amount_usd = round(
+                value / (10 ** pool_meta.token0.decimals) * prices.get(pool_meta.token0.price_key, 0.0),
+                4,
+            )
+
+        return NormalisedEvent(
+            block_number   = _block_num(log_),
+            tx_hash        = _tx_hash(log_),
+            log_index      = _log_index(log_),
+            chain          = chain,
+            protocol       = Protocol(pool_meta.protocol),
+            pool_address   = pool,
+            wallet_address = sender,
+            event_type     = EventType.TRANSFER,
+            amount_usd     = amount_usd,
+            amount_in      = int(value),
             timestamp      = _ts(ts),
         )
 
@@ -440,6 +506,24 @@ def _estimate_gmx_usd(token_addr: str, amount_in: int, prices: dict[str, float])
 
 
 # ── Log field helpers ─────────────────────────────────────────────────────────
+
+def _log_data(log_: dict) -> bytes:
+    """
+    Raw ABI-encoded bytes from a log's "data" field.
+
+    Real web3.py responses (w3.eth.get_logs()) return this as HexBytes, a
+    bytes subclass — .startswith("0x") on it raises TypeError (bytes
+    .startswith rejects a str argument), which every decoder in this file
+    used to do unconditionally. That exception was silently swallowed by
+    normalise()'s outer try/except, so no decoder ever actually parsed a
+    real on-chain log; only the plain-string "data" values built by unit
+    tests worked. Handle both shapes explicitly instead of assuming str.
+    """
+    raw = log_["data"]
+    if isinstance(raw, (bytes, bytearray)):
+        return bytes(raw)
+    return bytes.fromhex(raw[2:] if raw.startswith("0x") else raw)
+
 
 def _block_num(log_: dict) -> int:
     v = log_["blockNumber"]

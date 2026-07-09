@@ -51,6 +51,14 @@ def _build_synthetic_history() -> list:
     Volume estimates:
       Mantle — Agni Finance USDT/WMNT ~$50K/hour, Merchant Moe ~$20K/hour
       Arbitrum — Uniswap V3 WETH/USDC ~$3M/hour (100× Mantle scale)
+      HashKey — token transfer-flow monitoring, not swaps (no DEX with
+        meaningful volume found at launch — see chains.py's HASHKEY entry).
+        Baseline scale is from real observed on-chain data (2026-07-09):
+        USDT/WETH ~$20-60 per transfer at ~7/hour, WHSK smaller and far
+        more variable (~$0-120 per transfer at ~2/hour) — genuinely
+        small-dollar activity today, not whale/institutional scale, though
+        the z-score detector works on relative variance regardless of
+        absolute size.
 
     Separate baselines per chain prevent Arbitrum volume from masking Mantle
     anomalies and vice versa.
@@ -60,23 +68,27 @@ def _build_synthetic_history() -> list:
     now = time.time()
     history = []
 
-    # (chain, pool_address, mean_usd/hr, std_usd/hr)
+    # (chain, pool_address, mean_usd/hr, std_usd/hr, event_types)
     pools = [
         # Mantle pools
-        ("mantle", "0xcda86a272531e8640cd7f1a92c01839911b90bb0", 50_000,  15_000),
-        ("mantle", "0xe6829d9a7ee3040e1276fa75293bde931859e8fa", 30_000,  10_000),
-        ("mantle", "0x8e4bcaabb5df13c2c6d8fd44c7e0a5fc9c41e14d", 20_000,   8_000),
+        ("mantle", "0xcda86a272531e8640cd7f1a92c01839911b90bb0", 50_000,  15_000, ("swap", "mint")),
+        ("mantle", "0xe6829d9a7ee3040e1276fa75293bde931859e8fa", 30_000,  10_000, ("swap", "mint")),
+        ("mantle", "0x8e4bcaabb5df13c2c6d8fd44c7e0a5fc9c41e14d", 20_000,   8_000, ("swap", "mint")),
         # Arbitrum Uniswap V3 pools — order-of-magnitude higher volume
-        ("arbitrum", "0xc6962004f452be9203591991d15f6b388e09e8d0", 3_000_000, 800_000),
-        ("arbitrum", "0xc473e2aee3441bf9240be85eb122abb059a3b57c", 1_500_000, 400_000),
-        ("arbitrum", "0x641c00a822e8b671738d32a431a4fb6074e5c79d",   800_000, 250_000),
-        ("arbitrum", "0x2f5e87c9312fa29aed5c179e456625d79015299c",   400_000, 150_000),
+        ("arbitrum", "0xc6962004f452be9203591991d15f6b388e09e8d0", 3_000_000, 800_000, ("swap", "mint")),
+        ("arbitrum", "0xc473e2aee3441bf9240be85eb122abb059a3b57c", 1_500_000, 400_000, ("swap", "mint")),
+        ("arbitrum", "0x641c00a822e8b671738d32a431a4fb6074e5c79d",   800_000, 250_000, ("swap", "mint")),
+        ("arbitrum", "0x2f5e87c9312fa29aed5c179e456625d79015299c",   400_000, 150_000, ("swap", "mint")),
+        # HashKey Chain — token transfer flows (USDT, WETH, WHSK contracts)
+        ("hashkey", "0xf1b50ed67a9e2cc94ad3c477779e2d4cbfff9029",       25,      15, ("transfer",)),
+        ("hashkey", "0xefd4bc9afd210517803f293ababd701caeecdfd0",       35,      20, ("transfer",)),
+        ("hashkey", "0xb210d2120d57b758ee163cffb43e73728c471cf1",        5,       8, ("transfer",)),
     ]
 
-    for chain, pool, mean_usd, std_usd in pools:
+    for chain, pool, mean_usd, std_usd, event_types in pools:
         for hour in range(7 * 24):
             ts = now - (7 * 24 * 3600) + (hour * 3600)
-            for etype in ("swap", "mint"):
+            for etype in event_types:
                 vol = max(0, random.gauss(mean_usd, std_usd))
                 history.append({
                     "chain":        chain,

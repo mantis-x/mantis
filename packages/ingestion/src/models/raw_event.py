@@ -22,6 +22,11 @@ class Protocol(str, Enum):
     TRADER_JOE    = "trader_joe"
     # Arbitrum (Phase 2)
     GMX           = "gmx"
+    # HashKey Chain — no DEX with meaningful swap volume found at launch
+    # (verified: zero UniV3/UniV2/LB Swap-topic events over recent blocks on
+    # a chain otherwise doing ~45k tx/day); token transfer-flow monitoring
+    # instead, which also fits the compliance/institutional-flow narrative.
+    HASHKEY_FLOWS = "hashkey_flows"
 
 
 class EventType(str, Enum):
@@ -30,6 +35,7 @@ class EventType(str, Enum):
     BURN           = "burn"           # LP withdrawal
     OPEN_POSITION  = "open_position"  # GMX perp position increase
     CLOSE_POSITION = "close_position" # GMX perp position decrease
+    TRANSFER       = "transfer"       # large ERC-20 token transfer (HashKey flow monitoring)
 
 
 @dataclass

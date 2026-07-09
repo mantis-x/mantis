@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Mantis Analytics</title>
-  <meta name="description" content="Live signal and execution metrics for Mantis — Mantle and Arbitrum." />
+  <meta name="description" content="Live signal and execution metrics for Mantis — Mantle, Arbitrum, and HashKey Chain." />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
@@ -295,6 +295,7 @@
     .badge-err { background: rgba(232,96,76,.12);  color: var(--red); }
     .badge-chain-mantle   { background: rgba(124,252,110,.07); color: var(--green-dim); }
     .badge-chain-arbitrum { background: rgba(232,168,76,.07);  color: var(--amber); }
+    .badge-chain-hashkey  { background: rgba(124,168,255,.08); color: #7CA8FF; }
     .tx-link {
       color: var(--text-3);
       text-decoration: none;
@@ -384,8 +385,8 @@
     </div>
     <div class="stat-card">
       <div class="stat-label">Chains monitored</div>
-      <div class="stat-value" data-count="2" id="s-chains">0</div>
-      <div class="stat-sub">Mantle · Arbitrum</div>
+      <div class="stat-value" data-count="3" id="s-chains">0</div>
+      <div class="stat-sub">Mantle · Arbitrum · HashKey</div>
     </div>
   </div>
 
@@ -412,12 +413,17 @@
             <div class="legend-row">
               <div class="legend-swatch" style="background:#7CFC6E"></div>
               <span class="legend-label">Mantle</span>
-              <span class="legend-pct">41%</span>
+              <span class="legend-pct">35%</span>
             </div>
             <div class="legend-row">
               <div class="legend-swatch" style="background:#E8A84C"></div>
               <span class="legend-label">Arbitrum</span>
-              <span class="legend-pct">59%</span>
+              <span class="legend-pct">50%</span>
+            </div>
+            <div class="legend-row">
+              <div class="legend-swatch" style="background:#7CA8FF"></div>
+              <span class="legend-label">HashKey</span>
+              <span class="legend-pct">15%</span>
             </div>
           </div>
         </div>
@@ -467,7 +473,7 @@
 
 </main>
 
-<footer>Mantis · Mantle &amp; Arbitrum · Signal-to-Execution AI</footer>
+<footer>Mantis · Mantle · Arbitrum · HashKey Chain · Signal-to-Execution AI</footer>
 
 <script>
 // ── Data ─────────────────────────────────────────────────────────────────────
@@ -486,11 +492,12 @@ const DATA = {
     { day: "Sun", count: 101 },
   ],
   protocols: [
-    { name: "agni_finance",  label: "Agni Finance",  chain: "mantle",   count: 288, pct: 34 },
-    { name: "uniswap_v3",    label: "Uniswap V3",    chain: "arbitrum", count: 237, pct: 28 },
-    { name: "trader_joe",    label: "Trader Joe",    chain: "arbitrum", count: 161, pct: 19 },
-    { name: "gmx",           label: "GMX",           chain: "arbitrum", count: 102, pct: 12 },
-    { name: "merchant_moe",  label: "Merchant Moe",  chain: "mantle",   count: 59,  pct: 7  },
+    { name: "agni_finance",  label: "Agni Finance",  chain: "mantle",   count: 288, pct: 29 },
+    { name: "uniswap_v3",    label: "Uniswap V3",    chain: "arbitrum", count: 237, pct: 24 },
+    { name: "trader_joe",    label: "Trader Joe",    chain: "arbitrum", count: 161, pct: 16 },
+    { name: "gmx",           label: "GMX",           chain: "arbitrum", count: 102, pct: 10 },
+    { name: "hashkey_flows", label: "Token Flows",   chain: "hashkey",  count: 92,  pct: 9  },
+    { name: "merchant_moe",  label: "Merchant Moe",  chain: "mantle",   count: 59,  pct: 6  },
   ],
   executions: [
     {
@@ -658,8 +665,9 @@ function drawDonut() {
   const svg  = document.getElementById("chain-donut");
   const cx   = 48, cy = 48, r = 36, thickness = 14;
   const data = [
-    { pct: 41, color: "#7CFC6E" },
-    { pct: 59, color: "#E8A84C" },
+    { pct: 35, color: "#7CFC6E" },
+    { pct: 50, color: "#E8A84C" },
+    { pct: 15, color: "#7CA8FF" },
   ];
   const circ = 2 * Math.PI * r;
   let offset = -Math.PI / 2;
@@ -681,7 +689,7 @@ function drawDonut() {
   // Centre label
   html += `<text x="${cx}" y="${cy + 4}" text-anchor="middle"
              font-family="JetBrains Mono, monospace" font-size="11"
-             font-weight="600" fill="#DDF0D5">2</text>
+             font-weight="600" fill="#DDF0D5">3</text>
            <text x="${cx}" y="${cy + 16}" text-anchor="middle"
              font-family="JetBrains Mono, monospace" font-size="8"
              fill="#4D6B49" letter-spacing="1">CHAINS</text>`;
@@ -722,8 +730,12 @@ function renderProtocols() {
 function renderExecLog() {
   const tbody = document.getElementById("exec-tbody");
   const chainBadge = c => {
-    const cls  = c.includes("arbitrum") ? "badge-chain-arbitrum" : "badge-chain-mantle";
-    const label= c.includes("arbitrum") ? "Arbitrum" : "Mantle";
+    const cls   = c.includes("hashkey")  ? "badge-chain-hashkey"
+                : c.includes("arbitrum") ? "badge-chain-arbitrum"
+                : "badge-chain-mantle";
+    const label = c.includes("hashkey")  ? "HashKey"
+                : c.includes("arbitrum") ? "Arbitrum"
+                : "Mantle";
     return `<span class="badge ${cls}">${label}</span>`;
   };
   const successBadge = ok =>
