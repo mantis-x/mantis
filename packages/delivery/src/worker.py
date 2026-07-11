@@ -75,16 +75,23 @@ async def dispatch_signals(
     from src.discord.bot import discord_sub_manager, send_signal_to_subscribers as send_discord
     from src.line.bot import line_sub_manager, send_signal_to_subscribers as send_line
 
-    # Initialise on-chain audit logger
-    try:
-        audit_logger = OnChainLogger()
-        log.info(
-            "Audit logger ready — contract=%s",
-            os.getenv("AUDIT_CONTRACT_ADDRESS", "")[:12],
-        )
-    except Exception as exc:
-        log.warning("Audit logger unavailable: %s — signals will dispatch without on-chain logging", exc)
-        audit_logger = None
+    # On-chain audit loggers are built lazily, one per origin chain, since
+    # not every chain necessarily has a deployed SignalAuditLog yet.
+    audit_loggers: dict[str, OnChainLogger | None] = {}
+
+    def get_audit_logger(chain: str) -> OnChainLogger | None:
+        if chain not in audit_loggers:
+            try:
+                audit_loggers[chain] = OnChainLogger(chain=chain)
+                log.info("Audit logger ready — chain=%s", chain)
+            except Exception as exc:
+                log.warning(
+                    "Audit logger unavailable for chain=%s: %s — "
+                    "signals on this chain will dispatch without on-chain logging",
+                    chain, exc,
+                )
+                audit_loggers[chain] = None
+        return audit_loggers[chain]
 
     log.info("Signal dispatcher ready — listening on mantis:signals")
 
@@ -154,7 +161,9 @@ async def dispatch_signals(
                     sent += len(line_delivered)
                     log.info("Signal dispatched to %d/%d LINE subscribers", len(line_delivered), len(line_recipients))
 
-            # Log signal hash on-chain after dispatch
+            # Log signal hash on-chain after dispatch, on the signal's origin chain
+            signal_chain = signal.get("chain", "mantle")
+            audit_logger = get_audit_logger(signal_chain)
             if audit_logger and sent > 0:
                 try:
                     result = audit_logger.log_signal(type("S", (), {

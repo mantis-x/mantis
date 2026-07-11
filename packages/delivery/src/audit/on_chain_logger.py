@@ -1,9 +1,10 @@
 """
 OnChainLogger
 ─────────────
-Calls SignalAuditLog.logSignal() on Mantle immediately after a signal
-is dispatched via Telegram. Returns the tx hash, which is stored back
-on the signal row in Postgres so users can verify on the explorer.
+Calls SignalAuditLog.logSignal() on the signal's origin chain immediately
+after a signal is dispatched via Telegram. Returns the tx hash, which is
+stored back on the signal row in Postgres so users can verify on the
+explorer.
 
 Hash format (matches the Solidity contract's verify() expectation):
   keccak256(abi.encodePacked(canonicalJSON))
@@ -38,6 +39,27 @@ except ImportError:
     from web3.middleware import geth_poa_middleware as ExtraDataToPOAMiddleware
     
 log = logging.getLogger(__name__)
+
+# ── Per-chain routing ─────────────────────────────────────────────────────────
+# Contract addresses default to the shared AUDIT_CONTRACT_ADDRESS because the
+# deployer wallet used the same nonce sequence on every chain so far, which
+# makes the CREATE address identical across chains — but each chain gets its
+# own override env var in case a future deploy (e.g. Arbitrum) breaks that.
+_CHAIN_RPC_ENV = {
+    "mantle":   ("MANTLE_RPC_URL",   "https://rpc.mantle.xyz"),
+    "arbitrum": ("ARBITRUM_RPC_URL", "https://arb1.arbitrum.io/rpc"),
+    "hashkey":  ("HASHKEY_RPC_URL",  "https://mainnet.hsk.xyz"),
+}
+_CHAIN_CONTRACT_ENV = {
+    "mantle":   "AUDIT_CONTRACT_ADDRESS",
+    "arbitrum": "ARBITRUM_AUDIT_CONTRACT_ADDRESS",
+    "hashkey":  "HASHKEY_AUDIT_CONTRACT_ADDRESS",
+}
+_CHAIN_EXPLORER = {
+    "mantle":   "https://explorer.mantle.xyz",
+    "arbitrum": "https://arbiscan.io",
+    "hashkey":  "https://hsk.blockscout.com",
+}
 
 # ── ABI fragment (only the functions we call) ────────────────────────────────
 _ABI = [
@@ -93,16 +115,24 @@ class OnChainLogger:
 
     def __init__(
         self,
+        chain:            str  = "mantle",
         rpc_url:          str  = "",
         contract_address: str  = "",
         private_key:      str  = "",
     ):
-        rpc_url          = rpc_url          or os.environ["MANTLE_RPC_URL"]
-        contract_address = contract_address or os.environ["AUDIT_CONTRACT_ADDRESS"]
-        private_key      = private_key      or os.environ["DEPLOYER_PRIVATE_KEY"]
+        self.chain = chain
+        rpc_env, rpc_default = _CHAIN_RPC_ENV.get(chain, _CHAIN_RPC_ENV["mantle"])
+
+        rpc_url = rpc_url or os.getenv(rpc_env, rpc_default)
+        contract_address = (
+            contract_address
+            or os.getenv(_CHAIN_CONTRACT_ENV.get(chain, ""), "")
+            or os.environ["AUDIT_CONTRACT_ADDRESS"]
+        )
+        private_key = private_key or os.environ["DEPLOYER_PRIVATE_KEY"]
 
         self._w3 = Web3(Web3.HTTPProvider(rpc_url))
-        # Mantle uses PoA-compatible block headers
+        # Mantle/Arbitrum/HashKey all use PoA-compatible block headers
         self._w3.middleware_onion.inject(ExtraDataToPOAMiddleware, layer=0)
 
         self._account  = Account.from_key(private_key)
@@ -112,17 +142,13 @@ class OnChainLogger:
         )
         self._chain_id = self._w3.eth.chain_id
 
-        explorer_base = (
-            "https://explorer.mantle.xyz"
-            if self._chain_id == 5000
-            else "https://explorer.sepolia.mantle.xyz"
-        )
+        explorer_base = _CHAIN_EXPLORER.get(chain, "https://explorer.sepolia.mantle.xyz")
         self._explorer_tx  = f"{explorer_base}/tx"
         self._explorer_addr = f"{explorer_base}/address/{contract_address}"
 
         log.info(
-            "OnChainLogger ready — contract=%s chain=%s",
-            contract_address[:10], self._chain_id,
+            "OnChainLogger ready — chain=%s contract=%s chain_id=%s",
+            chain, contract_address[:10], self._chain_id,
         )
 
     # ── Public API ───────────────────────────────────────────────────────────

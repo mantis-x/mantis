@@ -1,5 +1,6 @@
 """
-ERC8004Logger — writes every agent decision to AgentIdentity.sol on Mantle.
+ERC8004Logger — writes every agent decision to AgentIdentity.sol on the
+agent's origin chain.
 
 Every execution (success or abort) is logged on-chain:
   - What signal triggered it
@@ -7,7 +8,7 @@ Every execution (success or abort) is logged on-chain:
   - Whether it succeeded or aborted (and why)
 
 This forms the agent's verifiable reputation ledger — visible on Demo Day
-by calling getDecision(agentId, index) on the Mantle explorer.
+by calling getDecision(agentId, index) on the origin chain's explorer.
 """
 from __future__ import annotations
 
@@ -16,6 +17,27 @@ import os
 from typing import Optional
 
 log = logging.getLogger(__name__)
+
+# ── Per-chain routing ─────────────────────────────────────────────────────────
+# Contract addresses default to the shared AGENT_IDENTITY_CONTRACT_ADDRESS
+# because the deployer wallet used the same nonce sequence on every chain so
+# far, which makes the CREATE address identical across chains — but each
+# chain gets its own override env var in case a future deploy diverges.
+_CHAIN_RPC_ENV = {
+    "mantle":   ("MANTLE_RPC_URL",   "https://rpc.mantle.xyz"),
+    "arbitrum": ("ARBITRUM_RPC_URL", "https://arb1.arbitrum.io/rpc"),
+    "hashkey":  ("HASHKEY_RPC_URL",  "https://mainnet.hsk.xyz"),
+}
+_CHAIN_CONTRACT_ENV = {
+    "mantle":   "AGENT_IDENTITY_CONTRACT_ADDRESS",
+    "arbitrum": "ARBITRUM_AGENT_IDENTITY_CONTRACT_ADDRESS",
+    "hashkey":  "HASHKEY_AGENT_IDENTITY_CONTRACT_ADDRESS",
+}
+_CHAIN_EXPLORER = {
+    "mantle":   "https://explorer.mantle.xyz",
+    "arbitrum": "https://arbiscan.io",
+    "hashkey":  "https://hsk.blockscout.com",
+}
 
 # AgentIdentity.sol ABI — only the functions we call
 _ABI = [
@@ -68,34 +90,39 @@ _ABI = [
 
 class ERC8004Logger:
     """
-    Logs agent decisions to AgentIdentity.sol on Mantle.
+    Logs agent decisions to AgentIdentity.sol on a given chain.
     Gracefully degrades if web3 or contract unavailable.
     """
 
-    def __init__(self):
+    def __init__(self, chain: str = "mantle"):
+        self.chain        = chain
         self._w3         = None
         self._contract   = None
         self._account    = None
         self._chain_id   = None
         self._ready      = False
-        self._explorer   = "https://explorer.mantle.xyz"
+        self._explorer   = _CHAIN_EXPLORER.get(chain, "https://explorer.mantle.xyz")
 
         try:
             self._setup()
         except Exception as exc:
-            log.warning("ERC8004Logger unavailable: %s", exc)
+            log.warning("ERC8004Logger unavailable for chain=%s: %s", chain, exc)
 
     def _setup(self) -> None:
         from web3 import Web3
         from eth_account import Account
 
-        rpc_url          = os.getenv("MANTLE_RPC_URL", "https://rpc.mantle.xyz")
-        contract_address = os.getenv("AGENT_IDENTITY_CONTRACT_ADDRESS", "")
+        rpc_env, rpc_default = _CHAIN_RPC_ENV.get(self.chain, _CHAIN_RPC_ENV["mantle"])
+        contract_env         = _CHAIN_CONTRACT_ENV.get(self.chain, "AGENT_IDENTITY_CONTRACT_ADDRESS")
+
+        rpc_url          = os.getenv(rpc_env, rpc_default)
+        contract_address = os.getenv(contract_env, "") or os.getenv("AGENT_IDENTITY_CONTRACT_ADDRESS", "")
         private_key      = os.getenv("DEPLOYER_PRIVATE_KEY", "")
 
         if not contract_address or not private_key:
             log.warning(
-                "AGENT_IDENTITY_CONTRACT_ADDRESS or DEPLOYER_PRIVATE_KEY not set"
+                "%s or DEPLOYER_PRIVATE_KEY not set for chain=%s",
+                contract_env, self.chain,
             )
             return
 
@@ -217,5 +244,6 @@ class ERC8004Logger:
 
     @property
     def explorer_url(self) -> str:
-        addr = os.getenv("AGENT_IDENTITY_CONTRACT_ADDRESS", "")
+        contract_env = _CHAIN_CONTRACT_ENV.get(self.chain, "AGENT_IDENTITY_CONTRACT_ADDRESS")
+        addr = os.getenv(contract_env, "") or os.getenv("AGENT_IDENTITY_CONTRACT_ADDRESS", "")
         return f"{self._explorer}/address/{addr}"

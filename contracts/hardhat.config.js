@@ -42,9 +42,16 @@ module.exports = {
         : [],
     },
     // HashKey Chain — OP-stack L2, chain_id/RPC verified live 2026-07-09.
-    // No testnet entry: the doc-provided testnet RPC
-    // (hashkeychain-testnet.alt.technology) doesn't resolve, and the
-    // hackathon requires mainnet deployment anyway.
+    // Testnet re-verified live 2026-07-11 (doc-provided
+    // hashkeychain-testnet.alt.technology still doesn't resolve — that
+    // testnet was retired; testnet.hsk.xyz is the current replacement).
+    hashkeyTestnet: {
+      url: process.env.HASHKEY_TESTNET_RPC_URL || "https://testnet.hsk.xyz",
+      chainId: 133,
+      accounts: process.env.DEPLOYER_PRIVATE_KEY
+        ? [process.env.DEPLOYER_PRIVATE_KEY]
+        : [],
+    },
     hashkey: {
       url: process.env.HASHKEY_RPC_URL || "https://mainnet.hsk.xyz",
       chainId: 177,

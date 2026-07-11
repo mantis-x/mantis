@@ -43,7 +43,7 @@ class Executor:
         self.guards       = GuardRunner()
         self.byreal       = ByrealCLIRunner(dry_run=DRY_RUN)
         self.arb_executor = ArbitrumSwapExecutor(dry_run=DRY_RUN)
-        self.identity     = ERC8004Logger()
+        self._identity_loggers: dict[str, ERC8004Logger] = {}
 
         log.info(
             "Executor ready — %d agents, byreal=%s, arb=%s, dry_run=%s",
@@ -88,9 +88,9 @@ class Executor:
             self.registry.record_execution(agent.agent_id, result.success)
             results.append(result)
 
-            # Log to ERC-8004 on Mantle
+            # Log to ERC-8004 on the request's origin chain
             detail = result.tx_hash if result.success else (result.abort_reason or "")
-            self.identity.log_decision(
+            self._identity_logger(request.chain).log_decision(
                 agent_id    = agent.agent_id,
                 signal_id   = request.signal_id,
                 action_type = result.action_type,
@@ -108,6 +108,12 @@ class Executor:
             )
 
         return results
+
+    def _identity_logger(self, chain: str) -> ERC8004Logger:
+        """One ERC8004Logger per origin chain, built lazily and cached."""
+        if chain not in self._identity_loggers:
+            self._identity_loggers[chain] = ERC8004Logger(chain=chain)
+        return self._identity_loggers[chain]
 
     def _execute(self, request: ExecutionRequest) -> ExecutionResult:
         """Run guards then execute via Byreal CLI."""
