@@ -11,7 +11,7 @@ can never cause delivery to miss a signal, and vice versa.
 Evaluates each signal against registered agent intent rules,
 and executes via Byreal Skills CLI when rules match.
 
-Every decision is logged to AgentIdentity.sol on Mantle.
+Every decision is logged to AgentIdentity.sol on the signal's origin chain.
 """
 from __future__ import annotations
 
@@ -50,12 +50,8 @@ async def main() -> None:
     executor = Executor()
 
     log.info(
-        "Identity contract: %s",
+        "Identity contract: %s (routed per origin chain — mantle/arbitrum/hashkey)",
         os.getenv("AGENT_IDENTITY_CONTRACT_ADDRESS", "not set")[:20],
-    )
-    log.info(
-        "Explorer: https://explorer.mantle.xyz/address/%s",
-        os.getenv("AGENT_IDENTITY_CONTRACT_ADDRESS", ""),
     )
 
     import redis.asyncio as aioredis
