@@ -4,9 +4,9 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Mantis — See the move. Make the move.</title>
-  <meta name="description" content="Signal-to-execution AI on Mantle and Arbitrum. Scout detects smart money. Execute acts on it." />
+  <meta name="description" content="Signal-to-execution AI on Mantle, Arbitrum, and HashKey Chain. Scout detects smart money. Execute acts on it." />
   <meta property="og:title" content="Mantis — See the move. Make the move." />
-  <meta property="og:description" content="Signal-to-execution AI on Mantle and Arbitrum. Scout detects smart money. Execute acts on it." />
+  <meta property="og:description" content="Signal-to-execution AI on Mantle, Arbitrum, and HashKey Chain. Scout detects smart money. Execute acts on it." />
   <meta property="og:type" content="website" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -551,6 +551,10 @@
       background: #F59E0B;
     }
 
+    .contract-network.live::before {
+      background: var(--green);
+    }
+
     /* ── EXECUTE PROOF ── */
     .proof-grid {
       display: grid;
@@ -848,10 +852,10 @@
 <!-- HERO -->
 <section>
   <div class="hero">
-    <p class="hero-eyebrow">Mantle · Arbitrum · Signal-to-Execution AI</p>
+    <p class="hero-eyebrow">Mantle · Arbitrum · HashKey Chain · Signal-to-Execution AI</p>
     <h1>See the move.<br /><em>Make the move.</em></h1>
     <p class="hero-sub">
-      Signal-to-execution AI running on Mantle and Arbitrum. Scout detects smart money in real time. Execute acts on it autonomously.
+      Signal-to-execution AI running on Mantle, Arbitrum, and HashKey Chain. Scout detects smart money in real time. Execute acts on it autonomously.
     </p>
     <div class="hero-actions">
       <a href="https://t.me/MantisScoutBot" target="_blank" rel="noopener" class="btn-primary">
@@ -873,7 +877,7 @@
     <div class="ticker-window">
       <div class="ticker-header">
         <span class="ticker-dot"></span>
-        <span class="ticker-header-label">mantis-scout · mantle + arbitrum · streaming</span>
+        <span class="ticker-header-label">mantis-scout · mantle + arbitrum + hashkey · streaming</span>
       </div>
       <div class="ticker-feed" id="tickerFeed">
         <!-- populated by JS -->
@@ -898,14 +902,14 @@
         <span class="product-tag">Scout · Intelligence Layer</span>
         <h3>Mantis Scout</h3>
         <p class="product-desc">
-          The intelligence layer. Monitors Agni Finance, Merchant Moe, and Fluxion on Mantle — plus Uniswap V3 and Trader Joe on Arbitrum — around the clock. Detects smart money wallet clusters using z-score anomaly detection, enriches each signal through Claude Sonnet, and delivers plain-English alerts with confidence scores to Telegram. Every signal is hashed and recorded immutably on-chain via <code style="font-family:var(--mono);font-size:0.8em;color:var(--green)">SignalAuditLog.sol</code>.
+          The intelligence layer. Monitors Agni Finance, Merchant Moe, and Fluxion on Mantle — Uniswap V3 and Trader Joe on Arbitrum — plus token transfer-flow monitoring on HashKey Chain — around the clock. Detects smart money wallet clusters using z-score anomaly detection, enriches each signal through Claude Sonnet, and delivers plain-English alerts with confidence scores to Telegram. Every signal is hashed and recorded immutably on-chain via <code style="font-family:var(--mono);font-size:0.8em;color:var(--green)">SignalAuditLog.sol</code>.
         </p>
         <ul class="product-specs">
           <li>Z-score anomaly detection across wallet clusters</li>
           <li>Claude Sonnet enrichment with confidence scoring</li>
           <li>Telegram delivery with instant signal alerts</li>
           <li>Immutable on-chain audit log per signal</li>
-          <li>Multi-chain: Mantle + Arbitrum from one deployment</li>
+          <li>Multi-chain: Mantle + Arbitrum + HashKey Chain from one deployment</li>
         </ul>
       </div>
       <div class="product-card">
@@ -935,14 +939,14 @@
     <p class="section-label">How It Works</p>
     <h2>Signal detected. Agent triggered.<br />Position opened. Outcome logged.</h2>
     <p class="section-intro">
-      One deployment, two chains. Mantle and Arbitrum feed a single pipeline — from raw RPC data to on-chain execution record.
+      One deployment, three chains. Mantle, Arbitrum, and HashKey Chain feed a single pipeline — from raw RPC data to on-chain execution record.
     </p>
 
     <div class="pipeline">
       <div class="pipe-step">
         <div class="pipe-num">01</div>
         <div class="pipe-name">Ingest</div>
-        <div class="pipe-detail">Mantle + Arbitrum RPC polling. Decoders for Agni, Merchant Moe, Fluxion, Uniswap V3, Trader Joe.</div>
+        <div class="pipe-detail">Mantle + Arbitrum + HashKey RPC polling. Decoders for Agni, Merchant Moe, Fluxion, Uniswap V3, Trader Joe, and HashKey ERC-20 transfer flow.</div>
         <div class="pipe-pkg">ingestion/</div>
       </div>
       <div class="pipe-step">
@@ -981,7 +985,7 @@
     <p class="section-label">On-Chain</p>
     <h2>Fully auditable. Forever.</h2>
     <p class="section-intro">
-      Four contracts across Mantle Sepolia and Arbitrum Sepolia. Every signal hashed. Every agent decision recorded. Nothing off-chain, nothing hidden.
+      Six contracts across three chains — Mantle Sepolia, Arbitrum Sepolia, and HashKey Chain <strong style="color:var(--green)">mainnet</strong>. Every signal hashed. Every agent decision recorded. Nothing off-chain, nothing hidden.
     </p>
 
     <div class="contracts-grid">
@@ -1025,6 +1029,26 @@
         </div>
         <a class="contract-network" href="https://sepolia.arbiscan.io/address/0x06036B53A1f8d2Cf691a6f324C0672eB6D865667" target="_blank" rel="noopener" style="text-decoration:none;">Arbitrum Sepolia Testnet ↗</a>
       </div>
+      <div class="contract-card">
+        <div class="contract-name">SignalAuditLog.sol</div>
+        <div class="contract-purpose">Same audit contract deployed on HashKey Chain mainnet. HashKey signals (ERC-20 transfer-flow monitoring) hashed on their native chain.</div>
+        <div class="contract-addr-label">Contract Address · HashKey Chain Mainnet</div>
+        <div class="contract-addr" onclick="copyAddr(this, 'HASHKEY_SIGNAL_CONTRACT_ADDRESS')" title="Click to copy">
+          <span id="HASHKEY_SIGNAL_CONTRACT_ADDRESS">0xd745Fc0c28B8755b6280232a179e21C50B1D3adf</span>
+          <span class="copy-hint">copy</span>
+        </div>
+        <a class="contract-network live" href="https://hsk.blockscout.com/address/0xd745Fc0c28B8755b6280232a179e21C50B1D3adf" target="_blank" rel="noopener" style="text-decoration:none;">HashKey Chain Mainnet ↗</a>
+      </div>
+      <div class="contract-card">
+        <div class="contract-name">AgentIdentity.sol</div>
+        <div class="contract-purpose">ERC-8004 agent identity deployed on HashKey Chain mainnet. HashKey today is directional flow-monitoring only — no execution triggers yet, so no decisions logged here.</div>
+        <div class="contract-addr-label">Contract Address · HashKey Chain Mainnet</div>
+        <div class="contract-addr" onclick="copyAddr(this, 'HASHKEY_AGENT_CONTRACT_ADDRESS')" title="Click to copy">
+          <span id="HASHKEY_AGENT_CONTRACT_ADDRESS">0x06036B53A1f8d2Cf691a6f324C0672eB6D865667</span>
+          <span class="copy-hint">copy</span>
+        </div>
+        <a class="contract-network live" href="https://hsk.blockscout.com/address/0x06036B53A1f8d2Cf691a6f324C0672eB6D865667" target="_blank" rel="noopener" style="text-decoration:none;">HashKey Chain Mainnet ↗</a>
+      </div>
     </div>
   </div>
 </section>
@@ -1037,7 +1061,7 @@
     <p class="section-label">On-Chain Proof</p>
     <h2>Execute confirmed.<br />On Mantle. Verifiable by anyone.</h2>
     <p class="section-intro">
-      Every agent decision — including the first real execution — is permanently recorded on Mantle Sepolia. Judges can verify live during Demo Day.
+      Every agent decision — including the first real execution — is permanently recorded on-chain. Judges can verify live during Demo Day.
     </p>
 
     <div class="proof-grid">
@@ -1080,6 +1104,19 @@
       </div>
 
       <div class="proof-card">
+        <div class="proof-card-label">Confirmed Transaction · SignalAuditLog.sol · HashKey Chain Mainnet</div>
+        <div class="proof-card-title">First Signal Logged — On-Chain (HashKey, live mainnet)</div>
+        <div class="proof-card-desc">
+          Mantis Scout logged its first signal hash to SignalAuditLog.sol on HashKey Chain <strong style="color:var(--green)">mainnet</strong> — chain_id 177, real HSK gas. AgentIdentity.sol is also deployed there; HashKey currently drives flow-monitoring signals only, so no execution decisions have been logged yet.
+        </div>
+        <a class="proof-tx" href="https://hsk.blockscout.com/tx/0xbad92de6085f5b1b7146ee234bd6557db77c6cb0a1db06e46b40cf94191d833d" target="_blank" rel="noopener">
+          <span>0xbad92de608… · logSignal "agni_finance" accumulation</span>
+          <span class="proof-tx-arrow">↗ View on Explorer</span>
+        </a>
+        <div class="proof-badge">Confirmed · HashKey Chain Mainnet</div>
+      </div>
+
+      <div class="proof-card">
         <div class="proof-card-label">How Execute Works</div>
         <div class="proof-card-title">Signal → Guard → Execute → Log</div>
         <div class="proof-card-desc">
@@ -1095,7 +1132,7 @@
       </div>
 
       <div class="proof-card full-width">
-        <div class="proof-card-label">ERC-8004 Agent Identity · Mantle Sepolia</div>
+        <div class="proof-card-label">ERC-8004 Agent Identity · Mantle Sepolia · Arbitrum Sepolia · HashKey Chain Mainnet</div>
         <div class="proof-card-title">AgentIdentity.sol — On-Chain Reputation Ledger</div>
         <div class="proof-card-desc">
           Every Mantis Execute agent is issued an ERC-8004 identity NFT on Mantle. Every decision — execute, abort, guard-reject — is logged permanently. No silent failures. No black box. Agents build a verifiable reputation over time.
@@ -1120,6 +1157,18 @@
           <a class="proof-tx" href="https://sepolia.arbiscan.io/address/0xd745Fc0c28B8755b6280232a179e21C50B1D3adf" target="_blank" rel="noopener">
             <span>0xd745Fc0c28B8755b6280232a179e21C50B1D3adf · SignalAuditLog · Arbitrum Sepolia</span>
             <span class="proof-tx-arrow">↗ View on Arbiscan</span>
+          </a>
+        </div>
+        <div style="margin-top:0.75rem">
+          <a class="proof-tx" href="https://hsk.blockscout.com/address/0x06036B53A1f8d2Cf691a6f324C0672eB6D865667" target="_blank" rel="noopener">
+            <span>0x06036B53A1f8d2Cf691a6f324C0672eB6D865667 · AgentIdentity · HashKey Chain Mainnet</span>
+            <span class="proof-tx-arrow">↗ View on Explorer</span>
+          </a>
+        </div>
+        <div style="margin-top:0.75rem">
+          <a class="proof-tx" href="https://hsk.blockscout.com/address/0xd745Fc0c28B8755b6280232a179e21C50B1D3adf" target="_blank" rel="noopener">
+            <span>0xd745Fc0c28B8755b6280232a179e21C50B1D3adf · SignalAuditLog · HashKey Chain Mainnet</span>
+            <span class="proof-tx-arrow">↗ View on Explorer</span>
           </a>
         </div>
       </div>
@@ -1150,6 +1199,7 @@
       <span class="stack-chip">ERC-8004</span>
       <span class="stack-chip">Mantle L2</span>
       <span class="stack-chip">Arbitrum L2</span>
+      <span class="stack-chip">HashKey Chain</span>
       <span class="stack-chip">Uniswap V3</span>
     </div>
   </div>
@@ -1165,8 +1215,9 @@
     <li><a href="https://t.me/MantisScoutBot" target="_blank" rel="noopener">Telegram</a></li>
     <li><a href="https://explorer.sepolia.mantle.xyz" target="_blank" rel="noopener">Mantle Explorer</a></li>
     <li><a href="https://sepolia.arbiscan.io" target="_blank" rel="noopener">Arbiscan</a></li>
+    <li><a href="https://hsk.blockscout.com" target="_blank" rel="noopener">HashKey Explorer</a></li>
   </ul>
-  <div class="footer-built">Built on <span>Mantle</span> &amp; <span>Arbitrum</span></div>
+  <div class="footer-built">Built on <span>Mantle</span>, <span>Arbitrum</span> &amp; <span>HashKey Chain</span></div>
 </footer>
 
 <!-- TOAST -->
@@ -1184,6 +1235,7 @@
     { time: '20m ago',  signal: 'High-confidence LP entry · 4.1σ spike',       protocol: 'Trader Joe · Arbitrum', conf: 94, cls: 'conf-high' },
     { time: '26m ago',  signal: 'Smart money cluster · new position opened',   protocol: 'Agni · Mantle',        conf: 82, cls: 'conf-high' },
     { time: '31m ago',  signal: 'Anomalous volume · ARB/WETH pool · 3.8σ',     protocol: 'Uniswap V3 · Arbitrum', conf: 76, cls: 'conf-mid' },
+    { time: '35m ago',  signal: 'Large USDT transfer-flow spike detected',     protocol: 'HashKey Chain',         conf: 71, cls: 'conf-mid' },
     { time: '38m ago',  signal: 'Anomaly cleared · signal aborted',            protocol: 'Fluxion · Mantle',      conf: 38, cls: 'conf-low' },
   ];
 
