@@ -19,7 +19,7 @@ Multi-chain signal-detection + execution pipeline, monorepo under `packages/`:
 ### Supported chains
 | Chain | chain_id | Signal source | Status |
 |---|---|---|---|
-| Mantle | 5000 | DEX swaps (Agni etc.) | Live, contracts deployed |
+| Mantle | 5000 | DEX swaps (Agni etc.) | Live trading; audit/identity contracts **only on Sepolia testnet, not mainnet** (see Known Bugs) |
 | Arbitrum | 42161 | Uniswap V3 swaps + GMX V1 perps | Live, execution wired |
 | HashKey Chain | 177 | ERC-20 Transfer flow monitoring (no DEX with real volume found) | **Live — contracts deployed on testnet (133) and mainnet (177)** |
 
@@ -56,12 +56,14 @@ Multi-chain signal-detection + execution pipeline, monorepo under `packages/`:
    - Existing test suites (`packages/executor`, `packages/delivery`) still pass — 66/66 and 16/16 respectively (excluding pre-existing DB-dependent test errors unrelated to this change, which need a live Postgres).
    - Known residual gap, not fixed (out of scope for this pass): if a HashKey-originated signal ever matched an agent's execution rules, `executor.py`'s `_do_swap` has no `chain == "hashkey"` branch and would fall through to the Mantle/Byreal swap path — harmless today since HashKey signals are directional flow-monitoring only and don't drive trade execution, but worth a guard if that ever changes.
 10. **docs/index.html updated for HashKey + accuracy pass** (2026-07-11): added HashKey Chain throughout (hero, product copy, pipeline, stack chips, footer). Added two new HashKey mainnet contract cards to the Contracts section and a HashKey proof card to the On-Chain Proof section, using a genuinely verified transaction — queried `eth_getLogs` on `SignalAuditLog` (HashKey mainnet) and found the deploy-script's smoke-test `logSignal` call really on-chain: tx `0xbad92de6085f5b1b7146ee234bd6557db77c6cb0a1db06e46b40cf94191d833d`. Did **not** relabel the existing "Mantle Sepolia" contract cards to "mainnet" — that would have been introducing a false claim, since the Mantle-mainnet deployment doesn't actually exist (see Known Bugs, found while double-checking before this edit). Added a `.contract-network.live` CSS class (green dot vs. amber) to visually distinguish the real HashKey mainnet badges from the testnet ones.
+11. **On-Chain Proof headline fix** (2026-07-12, `493740c`): the section's `<h2>` still read "Execute confirmed. On Mantle." after HashKey/Arbitrum proof cards were added in the same section — user caught this after the fact. Changed to "Execute confirmed. Across three chains." Small, but flagged here because it's exactly the kind of stale-claim pattern that caused the bigger Mantle-mainnet-contract issue above — worth double-checking headline/label copy whenever a section's content changes underneath it.
+12. **User decision (2026-07-12)**: deploying `SignalAuditLog`/`AgentIdentity` to Mantle mainnet (Pending Task #3 / Known Bug above) is deliberately **deferred, not forgotten** — documented as planned, to be revisited after the DoraHacks submission is finished. Current focus has shifted to finishing that submission.
 
 ## Pending Tasks
 
 1. **Done**: HashKey deployer wallet funded (133.18 HSK) and both contracts deployed to mainnet — see Completed Work #8.
 2. **Done**: audit-logger chain-scoping bug fixed and deployed to Railway (`ca5670e`) — see Completed Work #9.
-3. **New, critical**: deploy `SignalAuditLog.sol` + `AgentIdentity.sol` to **Mantle mainnet** — they were never actually deployed there (see Known Bugs). The deployer wallet already holds real MNT (it's live-trading Byreal swaps on Mantle mainnet), so this is unblocked by funding — just needs `npx hardhat run scripts/deploy_audit_log.js --network mantle` then `deploy_agent_identity.js` the same way, plus updating `.env`/Railway if the resulting addresses differ from the current `0xd745Fc0c...`/`0x06036B53...` (likely, since Mantle mainnet has a different nonce history than the other chains — do not assume the addresses will collide the way they did for Arbitrum Sepolia/HashKey).
+3. **Critical, deliberately deferred**: deploy `SignalAuditLog.sol` + `AgentIdentity.sol` to **Mantle mainnet** — they were never actually deployed there (see Known Bugs). User decision 2026-07-12: hold off until after the DoraHacks submission is finished, do not do this proactively. The deployer wallet already holds real MNT, so it's unblocked by funding whenever it's picked back up — `npx hardhat run scripts/deploy_audit_log.js --network mantle` then `deploy_agent_identity.js` the same way, plus updating `.env`/Railway if the resulting addresses differ from the current `0xd745Fc0c...`/`0x06036B53...` (likely, since Mantle mainnet has a different nonce history than the other chains — do not assume the addresses will collide the way they did for Arbitrum Sepolia/HashKey).
 4. Verify in production that the `claude-sonnet-5` enrichment fix is actually live (redeploy Railway service, watch logs for successful `✅ Signal enriched` lines instead of `Claude API error`).
 5. Set up Anthropic Console billing for `ANTHROPIC_API_KEY` if not already done — API billing is fully separate from any Claude Pro/Max subscription (prepaid credits or pay-as-you-go card, metered per token). Estimated cost is trivial (~$2–5.50/month at current signal volume, Sonnet 5 intro pricing through 2026-08-31).
 6. Watch Railway credit balance — this is the actual ongoing cost driver, not API/gas. Trial was down to "2 days or $1.39 left" as of 2026-07-11; recent burn rate (~$0.70/day, up from ~$0.17/day historically) projects to ~$20–25/month once on a paid plan — Hobby ($5/mo) has no usage cap but that's a minimum fee, not a ceiling, so expect real usage-based overage on top of it.
@@ -76,7 +78,7 @@ Multi-chain signal-detection + execution pipeline, monorepo under `packages/`:
 
 ## Next Priorities
 
-1. Fund HashKey deployer wallet and deploy the two contracts (only step left for full 3-chain parity).
-2. Confirm the Sonnet-5 enrichment fix is live in production and signals are flowing again (this was silently broken for weeks — verify, don't assume).
-3. Decide whether to fix the Mantle-only audit-logging scoping now or accept it as a known limitation for the near term.
+1. **Current focus: finish the DoraHacks submission** (`https://dorahacks.io/buidl/44876`, linked from `docs/index.html` footer). In progress as of 2026-07-12 — no submission checklist/status doc exists yet in-repo; next session should establish what's outstanding (write-up, demo video, screenshots, etc.) against `docs/demo_day_runbook.md`.
+2. Deploy `SignalAuditLog`/`AgentIdentity` to Mantle mainnet — deliberately deferred until after the submission (see Pending Tasks #3 and Known Bugs). Do not do this proactively; revisit once submission work is done.
+3. Confirm the Sonnet-5 enrichment fix is live in production and signals are flowing again (this was silently broken for weeks — verify, don't assume).
 4. Keep an eye on Railway balance/top-ups — it's the one real recurring cost with actual risk of causing an outage if it runs out.
