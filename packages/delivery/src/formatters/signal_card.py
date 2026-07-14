@@ -235,7 +235,7 @@ def format_status_card(stats: dict) -> str:
     return (
         "🦟 <b>Mantis Scout — Status</b>\n"
         "\n"
-        f"🟢 <b>Live</b> — Mantle mainnet\n"
+        f"🟢 <b>Live</b> — {stats.get('chains_label', 'Mantle')}\n"
         f"📦 Pools tracked: <b>{stats.get('pools', 11)}</b>\n"
         f"⚡ Signals today: <b>{stats.get('signals_today', 0)}</b>\n"
         f"🎯 Candidates scored: <b>{stats.get('candidates', 0)}</b>\n"
@@ -267,7 +267,7 @@ def format_status_card_plain(stats: dict) -> str:
     return (
         "Mantis Scout — Status\n"
         "\n"
-        "Live — Mantle mainnet\n"
+        f"Live — {stats.get('chains_label', 'Mantle')}\n"
         f"Pools tracked: {stats.get('pools', 11)}\n"
         f"Signals today: {stats.get('signals_today', 0)}\n"
         f"Candidates scored: {stats.get('candidates', 0)}\n"

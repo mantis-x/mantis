@@ -47,12 +47,30 @@ from src.formatters.signal_card import (
 )
 from src.audit.on_chain_logger import OnChainLogger
 
+# Chain display name + pool_registry size, kept in sync with
+# packages/ingestion/src/chains.py (no cross-package import to avoid
+# coupling the delivery container's build to ingestion's source tree).
+_CHAIN_DISPLAY = {
+    "mantle":   "Mantle",
+    "arbitrum": "Arbitrum",
+    "hashkey":  "HashKey Chain",
+}
+_CHAIN_POOL_COUNTS = {
+    "mantle":   11,
+    "arbitrum": 9,
+    "hashkey":  3,
+}
+_enabled_chains = [c.strip().lower() for c in os.getenv("CHAINS", "mantle").split(",") if c.strip()]
+_chains_label   = " · ".join(_CHAIN_DISPLAY.get(c, c.capitalize()) for c in _enabled_chains) or "Mantle"
+_pools_total    = sum(_CHAIN_POOL_COUNTS.get(c, 0) for c in _enabled_chains) or 11
+
 # Shared state
 sub_manager = SubscriptionManager()
 stats       = {
     "signals_today": 0,
     "candidates":    0,
-    "pools":         11,
+    "pools":         _pools_total,
+    "chains_label":  _chains_label,
     "subscribers":   0,
     "started_at":    time.time(),
 }
