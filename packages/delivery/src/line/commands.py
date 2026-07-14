@@ -11,6 +11,7 @@ Chain filter examples:
   subscribe              → all chains
   subscribe mantle       → Mantle only
   subscribe arbitrum     → Arbitrum only
+  subscribe hashkey      → HashKey Chain only
 """
 from __future__ import annotations
 
@@ -24,26 +25,26 @@ from src.common.subscription_manager import SubscriptionManager
 
 log = logging.getLogger(__name__)
 
-SUPPORTED_CHAINS = {"mantle", "arbitrum"}
+SUPPORTED_CHAINS = {"mantle", "arbitrum", "hashkey"}
 
 WELCOME_MSG = """Welcome to Mantis Scout!
 
-I monitor Mantle & Arbitrum DeFi 24/7 and alert you when smart money moves.
+I monitor Mantle, Arbitrum & HashKey Chain DeFi 24/7 and alert you when smart money moves.
 
 What I detect:
   - Smart money accumulation
   - Whale entries / exits
   - Unusual volume spikes
 
-Chains: Mantle · Arbitrum (more coming)
-Every signal is hashed on Mantle — fully auditable.
+Chains: Mantle · Arbitrum · HashKey Chain
+Every signal is hashed on-chain — fully auditable.
 
 You're now subscribed (all chains). Send "help" to see all commands.
 Free tier: 3 alerts/day · No credit card needed"""
 
 HELP_MSG = """Mantis Scout — Commands
 
-subscribe [chain]  Start receiving signals (chain: mantle | arbitrum | all)
+subscribe [chain]  Start receiving signals (chain: mantle | arbitrum | hashkey | all)
 unsubscribe        Stop receiving signals
 status             Bot status and stats
 history            Last 5 signals
@@ -54,6 +55,7 @@ Chain filter examples:
   subscribe              (all chains)
   subscribe mantle       (Mantle only)
   subscribe arbitrum     (Arbitrum only)
+  subscribe hashkey      (HashKey Chain only)
 
 Free tier: 3 alerts/day
 Pro tier: Unlimited alerts + Execute agent
@@ -70,7 +72,7 @@ def _parse_chain_arg(arg: str) -> tuple:
         return None, "all chains", None
     if arg in SUPPORTED_CHAINS:
         return {arg}, arg, None
-    return "invalid", arg, f'Unknown chain "{arg}". Supported: mantle, arbitrum, or leave blank for all.'
+    return "invalid", arg, f'Unknown chain "{arg}". Supported: mantle, arbitrum, hashkey, or leave blank for all.'
 
 
 def handle_follow(user_id: str, sub_manager: SubscriptionManager) -> str:
@@ -100,7 +102,7 @@ def handle_text(text: str, user_id: str, sub_manager: SubscriptionManager, stats
             return (
                 f"Subscribed! Receiving signals from {display}.\n"
                 "Free tier: 3 alerts/day.\n\n"
-                'Send "subscribe mantle" or "subscribe arbitrum" to filter by chain.\n'
+                'Send "subscribe mantle", "subscribe arbitrum", or "subscribe hashkey" to filter by chain.\n'
                 'Send "unsubscribe" to stop at any time.'
             )
         return f'Chain filter updated → {display}.'

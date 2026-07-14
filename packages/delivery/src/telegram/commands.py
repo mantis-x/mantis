@@ -3,7 +3,7 @@ Telegram command handlers for Mantis Scout bot.
 
 Commands:
   /start                — welcome + subscribe
-  /subscribe [chain]    — subscribe (optional chain filter: mantle | arbitrum | all)
+  /subscribe [chain]    — subscribe (optional chain filter: mantle | arbitrum | hashkey | all)
   /unsubscribe          — unsubscribe
   /status               — bot + market status
   /history              — last 5 signals
@@ -25,22 +25,22 @@ from src.telegram.subscription_manager import SubscriptionManager
 
 log = logging.getLogger(__name__)
 
-SUPPORTED_CHAINS = {"mantle", "arbitrum"}
+SUPPORTED_CHAINS = {"mantle", "arbitrum", "hashkey"}
 
 WELCOME_MSG = """🦟 <b>Welcome to Mantis Scout</b>
 
-I monitor Mantle &amp; Arbitrum DeFi 24/7 and alert you when smart money moves.
+I monitor Mantle, Arbitrum &amp; HashKey Chain DeFi 24/7 and alert you when smart money moves.
 
 <b>What I detect:</b>
   📈 Smart money accumulation
   🐋 Whale entries / exits
   ⚡ Unusual volume spikes
 
-<b>Chains:</b> Mantle · Arbitrum (more coming)
-<b>Every signal is hashed on Mantle — fully auditable.</b>
+<b>Chains:</b> Mantle · Arbitrum · HashKey Chain
+<b>Every signal is hashed on-chain — fully auditable.</b>
 
 Use /subscribe to receive alerts from all chains.
-Use /subscribe mantle or /subscribe arbitrum to filter by chain.
+Use /subscribe mantle, /subscribe arbitrum, or /subscribe hashkey to filter by chain.
 Use /help to see all commands.
 
 Free tier: 3 alerts/day · No credit card needed"""
@@ -48,7 +48,7 @@ Free tier: 3 alerts/day · No credit card needed"""
 
 HELP_MSG = """🦟 <b>Mantis Scout — Commands</b>
 
-/subscribe [chain]  Start receiving signals (chain: mantle | arbitrum | all)
+/subscribe [chain]  Start receiving signals (chain: mantle | arbitrum | hashkey | all)
 /unsubscribe        Stop receiving signals
 /status             Bot status and stats
 /history            Last 5 signals
@@ -59,6 +59,7 @@ HELP_MSG = """🦟 <b>Mantis Scout — Commands</b>
   /subscribe           → all chains
   /subscribe mantle    → Mantle only
   /subscribe arbitrum  → Arbitrum only
+  /subscribe hashkey   → HashKey Chain only
 
 <b>Free tier:</b> 3 alerts/day
 <b>Pro tier:</b> Unlimited alerts + Execute agent
@@ -98,7 +99,7 @@ def register_handlers(app, sub_manager: SubscriptionManager, stats: dict) -> Non
         if chains == "invalid":
             await update.message.reply_html(
                 f"Unknown chain <b>{display}</b>.\n"
-                "Supported: <code>mantle</code>, <code>arbitrum</code>, or leave blank for all.\n"
+                "Supported: <code>mantle</code>, <code>arbitrum</code>, <code>hashkey</code>, or leave blank for all.\n"
                 "Example: /subscribe arbitrum"
             )
             return
@@ -110,7 +111,7 @@ def register_handlers(app, sub_manager: SubscriptionManager, stats: dict) -> Non
             msg = (
                 f"✅ <b>Subscribed!</b> Receiving signals from <b>{display}</b>.\n\n"
                 "Free tier: 3 alerts/day.\n\n"
-                "Use /subscribe mantle or /subscribe arbitrum to filter by chain.\n"
+                "Use /subscribe mantle, /subscribe arbitrum, or /subscribe hashkey to filter by chain.\n"
                 "Use /unsubscribe to stop at any time."
             )
         else:
