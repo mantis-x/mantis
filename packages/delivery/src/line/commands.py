@@ -22,6 +22,7 @@ from src.formatters.signal_card import (
     format_history_card_plain,
 )
 from src.common.subscription_manager import SubscriptionManager
+from src.common.live_stats import get_live_candidates
 
 log = logging.getLogger(__name__)
 
@@ -86,7 +87,7 @@ def handle_unfollow(user_id: str, sub_manager: SubscriptionManager) -> None:
     log.info("LINE user unfollowed: user_id=%s", user_id)
 
 
-def handle_text(text: str, user_id: str, sub_manager: SubscriptionManager, stats: dict) -> str:
+async def handle_text(text: str, user_id: str, sub_manager: SubscriptionManager, stats: dict, redis_url: str = "") -> str:
     """Return the reply text for an incoming LINE text message."""
     command, _, arg = text.strip().lower().partition(" ")
 
@@ -115,6 +116,9 @@ def handle_text(text: str, user_id: str, sub_manager: SubscriptionManager, stats
 
     if command == "status":
         stats["line_subscribers"] = sub_manager.subscriber_count()
+        live_candidates = await get_live_candidates(redis_url)
+        if live_candidates is not None:
+            stats["candidates"] = live_candidates
         return format_status_card_plain(stats)
 
     if command == "history":

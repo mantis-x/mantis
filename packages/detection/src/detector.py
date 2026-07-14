@@ -166,6 +166,7 @@ class Detector:
         await r.ltrim("mantis:anomaly_candidates", 0, 999)
 
         self._candidates += 1
+        await r.set("mantis:stats:candidates", self._candidates)
         log.info(
             "🎯 Candidate queued: z=%.2f protocol=%s type=%s usd=%.0f",
             scored.z_score, scored.protocol, scored.event_type, scored.amount_usd,

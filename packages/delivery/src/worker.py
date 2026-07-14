@@ -225,12 +225,12 @@ async def main() -> None:
 
     log.info("=" * 50)
     log.info("  Mantis Scout — Telegram + Discord + LINE")
-    log.info("  Mantle DeFi signal delivery")
+    log.info("  Mantle · Arbitrum · HashKey Chain signal delivery")
     log.info("=" * 50)
 
     # Build the Telegram application
     app = Application.builder().token(token).build()
-    register_handlers(app, sub_manager, stats)
+    register_handlers(app, sub_manager, stats, redis_url)
 
     # Start the Telegram bot
     await app.initialize()
@@ -244,7 +244,7 @@ async def main() -> None:
     discord_bot = None
     if discord_token:
         from src.discord.bot import build_bot, discord_sub_manager
-        discord_bot = build_bot(discord_sub_manager, stats)
+        discord_bot = build_bot(discord_sub_manager, stats, redis_url)
         background_tasks.append(asyncio.create_task(discord_bot.start(discord_token)))
         log.info("Discord bot starting...")
     else:
@@ -257,7 +257,7 @@ async def main() -> None:
         from src.line.bot import build_messaging_api, run_line_bot, line_sub_manager
         line_api_client, line_messaging_api = build_messaging_api(line_access_token)
         background_tasks.append(asyncio.create_task(
-            run_line_bot(line_channel_secret, line_messaging_api, line_sub_manager, stats, port=line_port)
+            run_line_bot(line_channel_secret, line_messaging_api, line_sub_manager, stats, redis_url, port=line_port)
         ))
         log.info("LINE bot starting on port %d...", line_port)
     else:

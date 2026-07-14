@@ -39,6 +39,7 @@ def build_app(
     messaging_api: AsyncMessagingApi,
     sub_manager: SubscriptionManager,
     stats: dict,
+    redis_url: str = "",
 ) -> web.Application:
     parser = WebhookParser(channel_secret)
 
@@ -54,7 +55,7 @@ def build_app(
         for event in events:
             try:
                 if isinstance(event, MessageEvent) and isinstance(event.message, TextMessageContent):
-                    reply = handle_text(event.message.text, event.source.user_id, sub_manager, stats)
+                    reply = await handle_text(event.message.text, event.source.user_id, sub_manager, stats, redis_url)
                     await messaging_api.reply_message(
                         ReplyMessageRequest(reply_token=event.reply_token, messages=[TextMessage(text=reply)])
                     )
@@ -86,9 +87,10 @@ async def run_line_bot(
     messaging_api: AsyncMessagingApi,
     sub_manager: SubscriptionManager,
     stats: dict,
+    redis_url: str = "",
     port: int = 8000,
 ) -> None:
-    app    = build_app(channel_secret, messaging_api, sub_manager, stats)
+    app    = build_app(channel_secret, messaging_api, sub_manager, stats, redis_url)
     runner = web.AppRunner(app)
     await runner.setup()
     site = web.TCPSite(runner, "0.0.0.0", port)

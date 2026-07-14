@@ -19,12 +19,12 @@ log = logging.getLogger(__name__)
 discord_sub_manager = SubscriptionManager(channel="discord")
 
 
-def build_bot(sub_manager: SubscriptionManager, stats: dict) -> commands.Bot:
+def build_bot(sub_manager: SubscriptionManager, stats: dict, redis_url: str = "") -> commands.Bot:
     intents = discord.Intents.default()
     intents.message_content = True
 
     bot = commands.Bot(command_prefix="!", intents=intents, help_command=None)
-    register_handlers(bot, sub_manager, stats)
+    register_handlers(bot, sub_manager, stats, redis_url)
 
     @bot.event
     async def on_guild_join(guild) -> None:
@@ -34,8 +34,8 @@ def build_bot(sub_manager: SubscriptionManager, stats: dict) -> commands.Bot:
     return bot
 
 
-async def run_discord_bot(token: str, sub_manager: SubscriptionManager, stats: dict) -> None:
-    bot = build_bot(sub_manager, stats)
+async def run_discord_bot(token: str, sub_manager: SubscriptionManager, stats: dict, redis_url: str = "") -> None:
+    bot = build_bot(sub_manager, stats, redis_url)
     try:
         await bot.start(token)
     except Exception as exc:

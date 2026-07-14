@@ -22,6 +22,7 @@ from src.formatters.signal_card import (
     format_history_card,
 )
 from src.telegram.subscription_manager import SubscriptionManager
+from src.common.live_stats import get_live_candidates
 
 log = logging.getLogger(__name__)
 
@@ -82,7 +83,7 @@ def _parse_chain_arg(args: list[str]) -> tuple[str | None, str]:
     return "invalid", chain
 
 
-def register_handlers(app, sub_manager: SubscriptionManager, stats: dict) -> None:
+def register_handlers(app, sub_manager: SubscriptionManager, stats: dict, redis_url: str = "") -> None:
     """Register all command handlers with the Application."""
     from telegram.ext import CommandHandler
 
@@ -129,6 +130,9 @@ def register_handlers(app, sub_manager: SubscriptionManager, stats: dict) -> Non
 
     async def status(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         stats["subscribers"] = sub_manager.subscriber_count()
+        live_candidates = await get_live_candidates(redis_url)
+        if live_candidates is not None:
+            stats["candidates"] = live_candidates
         await update.message.reply_html(format_status_card(stats))
 
     async def history(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:

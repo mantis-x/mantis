@@ -18,6 +18,7 @@ from src.formatters.signal_card import (
     format_history_card_plain,
 )
 from src.common.subscription_manager import SubscriptionManager
+from src.common.live_stats import get_live_candidates
 
 log = logging.getLogger(__name__)
 
@@ -75,7 +76,7 @@ def _parse_chain_arg(arg: str) -> tuple:
     return "invalid", arg, f"Unknown chain `{arg}`. Supported: `mantle`, `arbitrum`, `hashkey`, or leave blank for all."
 
 
-def register_handlers(bot, sub_manager: SubscriptionManager, stats: dict) -> None:
+def register_handlers(bot, sub_manager: SubscriptionManager, stats: dict, redis_url: str = "") -> None:
     """Register all command handlers with the discord.py Bot."""
 
     @bot.command(name="subscribe")
@@ -115,6 +116,9 @@ def register_handlers(bot, sub_manager: SubscriptionManager, stats: dict) -> Non
     @bot.command(name="status")
     async def status(ctx) -> None:
         stats["discord_subscribers"] = sub_manager.subscriber_count()
+        live_candidates = await get_live_candidates(redis_url)
+        if live_candidates is not None:
+            stats["candidates"] = live_candidates
         await ctx.send(format_status_card_plain(stats))
 
     @bot.command(name="history")
