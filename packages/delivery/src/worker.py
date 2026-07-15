@@ -90,8 +90,24 @@ async def dispatch_signals(
     import redis.asyncio as aioredis
     r = aioredis.from_url(redis_url, decode_responses=True)
 
-    from src.discord.bot import discord_sub_manager, send_signal_to_subscribers as send_discord
-    from src.line.bot import line_sub_manager, send_signal_to_subscribers as send_line
+    # Import Discord/LINE only when actually enabled -- these were previously
+    # imported unconditionally here even though Discord/LINE are optional and
+    # skipped elsewhere in this file when their tokens aren't set. If either
+    # package has any import-time issue in the deployed image, an
+    # unconditional import here silently kills this entire background task
+    # before its first log line -- meaning Telegram delivery (which does not
+    # depend on either package) would break too, for a completely unrelated
+    # reason, with no error anywhere. Scope the imports to match how main()
+    # already gates these platforms.
+    discord_sub_manager = None
+    send_discord         = None
+    if discord_bot is not None:
+        from src.discord.bot import discord_sub_manager, send_signal_to_subscribers as send_discord
+
+    line_sub_manager = None
+    send_line        = None
+    if line_messaging_api is not None:
+        from src.line.bot import line_sub_manager, send_signal_to_subscribers as send_line
 
     # On-chain audit loggers are built lazily, one per origin chain, since
     # not every chain necessarily has a deployed SignalAuditLog yet.
