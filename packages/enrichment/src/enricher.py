@@ -102,10 +102,24 @@ class Enricher:
                 response = self._client.messages.create(
                     model      = "claude-sonnet-5",
                     max_tokens = 512,
+                    # This is a small JSON classification call with no need for
+                    # multi-step reasoning -- disable thinking explicitly rather
+                    # than relying on the default. Sonnet 5 runs adaptive
+                    # thinking when `thinking` is omitted (unlike the retired
+                    # Sonnet 4 model this was originally written against), which
+                    # prepends a ThinkingBlock to response.content ahead of the
+                    # TextBlock. content[0].text was crashing on every call once
+                    # migrated to Sonnet 5, since content[0] was the
+                    # ThinkingBlock, not the TextBlock.
+                    thinking   = {"type": "disabled"},
                     system     = SYSTEM_PROMPT,
                     messages   = [{"role": "user", "content": prompt}],
                 )
-                return response.content[0].text
+                for block in response.content:
+                    if block.type == "text":
+                        return block.text
+                log.error("Claude response had no text block: %r", response.content)
+                return None
 
             except anthropic.RateLimitError:
                 if attempt < MAX_RETRIES:
