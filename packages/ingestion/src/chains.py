@@ -68,6 +68,14 @@ class ChainConfig:
 
 
 # ── Mantle ────────────────────────────────────────────────────────────────────
+#
+# Token addresses below verified on-chain 2026-07-16 via name()/symbol()/
+# decimals() calls against rpc.mantle.xyz, cross-checked against
+# swapsicledex/swapsicle-default-token-list's tokens/mantle.json.
+_MANTLE_WMNT = TokenMeta("0x78c1b0c915c4faa5fffa6cabf0219da63d7f4cb8", "mnt",  18)
+_MANTLE_USDT = TokenMeta("0x201eba5cc46d216ce6dc03f6a759e8e766e956ae", "usdt",  6)
+_MANTLE_USDC = TokenMeta("0x09bc4e0d864854c6afb6eb9a9cdf58ac190d0df9", "usdc",  6)
+_MANTLE_WETH = TokenMeta("0xdeaddeaddeaddeaddeaddeaddeaddeaddead1111", "weth", 18)
 
 MANTLE = ChainConfig(
     name="mantle",
@@ -80,16 +88,44 @@ MANTLE = ChainConfig(
     max_blocks_per_batch=50,
     native_token="mnt",
     pool_registry={
-        # Agni Finance (V3-style concentrated liquidity on Mantle)
-        # Swap topic: Agni's 9-field variant (includes protocol fees)
-        # token0/token1 not set → legacy MNT-based USD estimation
-        "0x319b69888b0d11cec22caa5034e25fffbdc88421": PoolMeta("agni_finance"),  # Swap Router (proxy)
-        "0x218bf598d1453383e2f4aa7b14ffb9bfb102d637": PoolMeta("agni_finance"),  # NFT Position Manager
-        "0xcda86a272531e8640cd7f1a92c01839911b90bb0": PoolMeta("agni_finance"),  # USDT/WMNT
-        "0xe6829d9a7ee3040e1276fa75293bde931859e8fa": PoolMeta("agni_finance"),  # USDC/WMNT
-        "0x50b76565c42b6a4e3e50be5d09d90e2c84f1f89f": PoolMeta("agni_finance"),  # mETH/WMNT
-        "0xa1890b4a39e64e6c19c33ef45f55f7e95c3b4543": PoolMeta("agni_finance"),  # WETH/WMNT
-        # Merchant Moe (Liquidity Book)
+        # Agni Finance (PancakeV3-fork concentrated liquidity on Mantle).
+        # Swap topic: Agni's 9-field variant (includes protocol fees).
+        #
+        # 2026-07-16: the previous entries here were never real pool
+        # contracts -- eth_getLogs for the Swap topic returned zero hits,
+        # ever, on all of them. Two of the five ("USDT/WMNT", "USDC/WMNT")
+        # turned out to be the mETH and cmETH *token* contracts (confirmed
+        # via name()/symbol() -- name='mETH'/'cmETH'), not pools; the
+        # other three either weren't valid ERC-20s or (the "Swap Router")
+        # was a real router address that structurally can't emit pool-level
+        # Swap events. Every real Mantle event this project has ever
+        # ingested was a stray ERC-20 Transfer/Approval from those token
+        # contracts, priced at $0 by the transfer decoder -- not decoded
+        # DEX activity.
+        #
+        # Replaced with the three most active real pools, found via
+        # AgniFactory.getPool() (0x25780dc8Fc3cfBD75F33bFDAB65e969b603b2035,
+        # from Agni's own Immunefi bug-bounty scope) across all fee tiers,
+        # then verified by real eth_getLogs Swap-topic hit counts on-chain
+        # (20,000-block sample, ~11h): WMNT/USDC 40 swaps, WMNT/WETH 27,
+        # WMNT/USDT 11. token0/token1 set (both directly confirmed via each
+        # pool's own token0()/token1() view functions) so pricing uses the
+        # token-aware branch of _estimate_usd, not the legacy 18-decimal-MNT
+        # fallback that silently mis-prices any 6-decimal leg.
+        "0x1858d52cf57c07a018171d7a1e68dc081f17144f": PoolMeta(
+            "agni_finance", token0=_MANTLE_USDC, token1=_MANTLE_WMNT,
+        ),  # WMNT/USDC 0.05% -- most active of the three, ~$35/hr real volume
+        "0x54169896d28dec0ffabe3b16f90f71323774949f": PoolMeta(
+            "agni_finance", token0=_MANTLE_WMNT, token1=_MANTLE_WETH,
+        ),  # WMNT/WETH 0.05%
+        "0xd08c50f7e69e9aeb2867deff4a8053d9a855e26a": PoolMeta(
+            "agni_finance", token0=_MANTLE_USDT, token1=_MANTLE_WMNT,
+        ),  # WMNT/USDT 0.05% -- quietest of the three, ~1 swap/hr
+        # Merchant Moe (Liquidity Book) and Fluxion addresses below are
+        # UNVERIFIED -- not checked as part of the 2026-07-16 Agni fix.
+        # Given the Agni entries turned out to be entirely wrong, treat
+        # these with the same suspicion until someone verifies them the
+        # same way (real Swap/LB-swap topic hits via eth_getLogs).
         "0x013e138ef6008ae3b5a8c21e6ef571d89b0b57d8": PoolMeta("merchant_moe"),  # LB Router
         "0x32a42b22a5337a7e0ab90f6f1f7bec37ae48f51f": PoolMeta("merchant_moe"),  # LB Factory
         "0x8e4bcaabb5df13c2c6d8fd44c7e0a5fc9c41e14d": PoolMeta("merchant_moe"),

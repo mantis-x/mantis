@@ -49,8 +49,13 @@ def _build_synthetic_history() -> list:
     Generate 7 days of synthetic baseline data for all enabled chains.
 
     Volume estimates:
-      Mantle — Agni Finance USDT/WMNT ~$50K/hour, Merchant Moe ~$20K/hour
-      Arbitrum — Uniswap V3 WETH/USDC ~$3M/hour (100× Mantle scale)
+      Mantle — Agni Finance real pools (WMNT/USDC, WMNT/WETH, WMNT/USDT):
+        $3-35/hour, from real on-chain swaps observed 2026-07-16. The
+        addresses tracked before this date were never real pools (verified
+        zero Swap-topic hits, ever) — see chains.py's MANTLE pool_registry
+        comment for the full story. Genuinely retail-scale activity today,
+        not the $20K-50K/hour previously assumed.
+      Arbitrum — Uniswap V3 WETH/USDC ~$3M/hour (~100,000× Mantle's real scale)
       HashKey — token transfer-flow monitoring, not swaps (no DEX with
         meaningful volume found at launch — see chains.py's HASHKEY entry).
         Baseline scale is from real observed on-chain data (2026-07-09):
@@ -70,10 +75,16 @@ def _build_synthetic_history() -> list:
 
     # (chain, pool_address, mean_usd/hr, std_usd/hr, event_types)
     pools = [
-        # Mantle pools
-        ("mantle", "0xcda86a272531e8640cd7f1a92c01839911b90bb0", 50_000,  15_000, ("swap", "mint")),
-        ("mantle", "0xe6829d9a7ee3040e1276fa75293bde931859e8fa", 30_000,  10_000, ("swap", "mint")),
-        ("mantle", "0x8e4bcaabb5df13c2c6d8fd44c7e0a5fc9c41e14d", 20_000,   8_000, ("swap", "mint")),
+        # Mantle pools — real Agni Finance V3 pools (fixed 2026-07-16; see
+        # chains.py comment for how these were found/verified). Volume is
+        # calibrated from real observed swaps (20,000-block/~11h sample),
+        # not assumed — genuine Mantle DEX activity here is retail-scale
+        # (single-digit to low-double-digit dollars per swap), nowhere near
+        # the $20K-50K/hr previously assumed for the wrong addresses this
+        # replaced.
+        ("mantle", "0x1858d52cf57c07a018171d7a1e68dc081f17144f", 35,  25, ("swap", "mint")),  # WMNT/USDC 0.05%
+        ("mantle", "0x54169896d28dec0ffabe3b16f90f71323774949f",  5,   4, ("swap", "mint")),  # WMNT/WETH 0.05%
+        ("mantle", "0xd08c50f7e69e9aeb2867deff4a8053d9a855e26a",  3,   3, ("swap", "mint")),  # WMNT/USDT 0.05%
         # Arbitrum Uniswap V3 pools — order-of-magnitude higher volume
         ("arbitrum", "0xc6962004f452be9203591991d15f6b388e09e8d0", 3_000_000, 800_000, ("swap", "mint")),
         ("arbitrum", "0xc473e2aee3441bf9240be85eb122abb059a3b57c", 1_500_000, 400_000, ("swap", "mint")),
