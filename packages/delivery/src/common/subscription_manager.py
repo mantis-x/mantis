@@ -116,6 +116,20 @@ class SubscriptionManager:
     def get_history(self, limit: int = 5) -> list[dict]:
         return self._signal_history[:limit]
 
+    def get_signal_by_id(self, signal_id) -> Optional[dict]:
+        """Look up a recently-dispatched signal by id, to resolve which
+        chain it was logged on (e.g. for /verify). Only searches in-memory
+        history (last 50, this process) — older or cross-process signal ids
+        return None rather than guessing a chain."""
+        try:
+            signal_id = int(signal_id)
+        except (TypeError, ValueError):
+            return None
+        for signal in self._signal_history:
+            if signal.get("id") == signal_id:
+                return signal
+        return None
+
     def subscriber_count(self) -> int:
         with get_session() as session:
             return session.query(SubscriptionRow).filter(

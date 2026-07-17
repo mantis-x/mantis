@@ -57,6 +57,9 @@ class SubscriptionManager:
     def get_history(self, limit: int = 5) -> list[dict]:
         return self._store.get_history(limit)
 
+    def get_signal_by_id(self, signal_id) -> Optional[dict]:
+        return self._store.get_signal_by_id(signal_id)
+
     def subscriber_count(self) -> int:
         return self._store.subscriber_count()
 

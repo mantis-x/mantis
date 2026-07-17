@@ -23,10 +23,12 @@ from src.formatters.signal_card import (
 )
 from src.telegram.subscription_manager import SubscriptionManager
 from src.common.live_stats import get_live_candidates
+from src.audit.on_chain_logger import get_explorer_contract_url
 
 log = logging.getLogger(__name__)
 
 SUPPORTED_CHAINS = {"mantle", "arbitrum", "hashkey"}
+_CHAIN_LABEL = {"mantle": "Mantle", "arbitrum": "Arbitrum", "hashkey": "HashKey Chain"}
 
 WELCOME_MSG = """🦟 <b>Welcome to Mantis Scout</b>
 
@@ -142,21 +144,48 @@ def register_handlers(app, sub_manager: SubscriptionManager, stats: dict, redis_
     async def verify(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         args = ctx.args
         if not args:
+            links = "\n".join(
+                f"• <a href='{get_explorer_contract_url(c)}'>{_CHAIN_LABEL[c]}</a>"
+                for c in ("mantle", "arbitrum", "hashkey")
+                if get_explorer_contract_url(c)
+            )
             await update.message.reply_html(
                 "Usage: /verify &lt;signal_id&gt;\n"
                 "Example: /verify 42\n\n"
-                "Check the signal's on-chain hash at:\n"
-                "https://explorer.mantle.xyz/address/0xd745Fc0c28B8755b6280232a179e21C50B1D3adf"
+                "Every signal is hashed on its origin chain. Give a signal ID "
+                "and I'll look up the right one, or browse SignalAuditLog directly:\n"
+                f"{links}",
+                disable_web_page_preview=True,
             )
             return
 
         signal_id = args[0]
-        explorer  = "https://explorer.mantle.xyz/address/0xd745Fc0c28B8755b6280232a179e21C50B1D3adf"
+        signal = sub_manager.get_signal_by_id(signal_id)
+
+        if signal is None:
+            links = "\n".join(
+                f"• <a href='{get_explorer_contract_url(c)}'>{_CHAIN_LABEL[c]}</a>"
+                for c in ("mantle", "arbitrum", "hashkey")
+                if get_explorer_contract_url(c)
+            )
+            msg = (
+                f"🔐 <b>Signal #{signal_id}</b>\n\n"
+                "I don't have this one in recent history (older than the last 50 "
+                "signals, or an invalid ID) — so I can't tell you which chain it's "
+                "logged on. You can still browse SignalAuditLog directly:\n"
+                f"{links}"
+            )
+            await update.message.reply_html(msg, disable_web_page_preview=True)
+            return
+
+        chain    = signal.get("chain", "mantle")
+        label    = _CHAIN_LABEL.get(chain, chain.capitalize())
+        explorer = get_explorer_contract_url(chain)
         msg = (
             f"🔐 <b>Signal #{signal_id} audit</b>\n\n"
             f"Every Mantis Scout signal is hashed with keccak256 "
-            f"and recorded immutably on Mantle.\n\n"
-            f"<a href='{explorer}'>View SignalAuditLog on Mantle Explorer →</a>"
+            f"and recorded immutably — this one on {label}.\n\n"
+            f"<a href='{explorer}'>View SignalAuditLog on {label} Explorer →</a>"
         )
         await update.message.reply_html(msg, disable_web_page_preview=True)
 

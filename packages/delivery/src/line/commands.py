@@ -23,10 +23,12 @@ from src.formatters.signal_card import (
 )
 from src.common.subscription_manager import SubscriptionManager
 from src.common.live_stats import get_live_candidates
+from src.audit.on_chain_logger import get_explorer_contract_url
 
 log = logging.getLogger(__name__)
 
 SUPPORTED_CHAINS = {"mantle", "arbitrum", "hashkey"}
+_CHAIN_LABEL = {"mantle": "Mantle", "arbitrum": "Arbitrum", "hashkey": "HashKey Chain"}
 
 WELCOME_MSG = """Welcome to Mantis Scout!
 
@@ -62,9 +64,6 @@ Free tier: 3 alerts/day
 Pro tier: Unlimited alerts + Execute agent
 
 github.com/mantis-x/mantis"""
-
-EXPLORER_CONTRACT = "https://explorer.mantle.xyz/address/0xd745Fc0c28B8755b6280232a179e21C50B1D3adf"
-
 
 def _parse_chain_arg(arg: str) -> tuple:
     """Returns (chains_set_or_None, display_text, error_or_None)."""
@@ -125,17 +124,37 @@ async def handle_text(text: str, user_id: str, sub_manager: SubscriptionManager,
         return format_history_card_plain(sub_manager.get_history(5))
 
     if command == "verify":
+        links = "\n".join(
+            f"{_CHAIN_LABEL[c]}: {get_explorer_contract_url(c)}"
+            for c in ("mantle", "arbitrum", "hashkey")
+            if get_explorer_contract_url(c)
+        )
+
         if not arg:
             return (
                 'Usage: "verify <signal_id>"\n'
                 'Example: "verify 42"\n\n'
-                f"Check the signal's on-chain hash at:\n{EXPLORER_CONTRACT}"
+                "Every signal is hashed on its origin chain. Give a signal ID "
+                f"and I'll look up the right one, or browse SignalAuditLog directly:\n{links}"
             )
+
+        signal = sub_manager.get_signal_by_id(arg)
+        if signal is None:
+            return (
+                f"Signal #{arg}\n\n"
+                "I don't have this one in recent history (older than the last 50 "
+                "signals, or an invalid ID) — so I can't tell you which chain it's "
+                f"logged on. You can still browse SignalAuditLog directly:\n{links}"
+            )
+
+        chain    = signal.get("chain", "mantle")
+        label    = _CHAIN_LABEL.get(chain, chain.capitalize())
+        explorer = get_explorer_contract_url(chain)
         return (
             f"Signal #{arg} audit\n\n"
             "Every Mantis Scout signal is hashed with keccak256 "
-            "and recorded immutably on Mantle.\n\n"
-            f"View SignalAuditLog on Mantle Explorer:\n{EXPLORER_CONTRACT}"
+            f"and recorded immutably — this one on {label}.\n\n"
+            f"View SignalAuditLog on {label} Explorer:\n{explorer}"
         )
 
     if command == "help":

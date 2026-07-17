@@ -41,10 +41,12 @@ except ImportError:
 log = logging.getLogger(__name__)
 
 # ── Per-chain routing ─────────────────────────────────────────────────────────
-# Contract addresses default to the shared AUDIT_CONTRACT_ADDRESS because the
-# deployer wallet used the same nonce sequence on every chain so far, which
-# makes the CREATE address identical across chains — but each chain gets its
-# own override env var in case a future deploy (e.g. Arbitrum) breaks that.
+# Contract addresses default to the shared AUDIT_CONTRACT_ADDRESS, which is
+# correct for Mantle and HashKey (same deployer, same starting nonce on both
+# chains, so the CREATE address happened to be identical). Arbitrum's deploy
+# landed on a different address — the deployer wallet already had unrelated
+# prior activity there — so it requires the ARBITRUM_* override below; never
+# assume the shared default applies to Arbitrum.
 _CHAIN_RPC_ENV = {
     "mantle":   ("MANTLE_RPC_URL",   "https://rpc.mantle.xyz"),
     "arbitrum": ("ARBITRUM_RPC_URL", "https://arb1.arbitrum.io/rpc"),
@@ -60,6 +62,25 @@ _CHAIN_EXPLORER = {
     "arbitrum": "https://arbiscan.io",
     "hashkey":  "https://hsk.blockscout.com",
 }
+
+
+def get_explorer_contract_url(chain: str) -> str:
+    """
+    Block-explorer link to the given chain's deployed SignalAuditLog, using
+    the same per-chain override resolution as OnChainLogger.__init__ —
+    without needing a private key or RPC connection, so bot command handlers
+    (e.g. /verify) can call this directly instead of hardcoding one chain's
+    address. Returns "" if no address is configured for the chain.
+    """
+    contract_address = (
+        os.getenv(_CHAIN_CONTRACT_ENV.get(chain, ""), "")
+        or os.getenv("AUDIT_CONTRACT_ADDRESS", "")
+    )
+    if not contract_address:
+        return ""
+    explorer_base = _CHAIN_EXPLORER.get(chain, _CHAIN_EXPLORER["mantle"])
+    return f"{explorer_base}/address/{contract_address}"
+
 
 # ── ABI fragment (only the functions we call) ────────────────────────────────
 _ABI = [
