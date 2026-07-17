@@ -85,14 +85,14 @@ make execute                # start Execute agent
 
 ## Contracts
 
-| Contract | Mantle Sepolia | Arbitrum Sepolia | HashKey testnet | HashKey mainnet |
-|---|---|---|---|---|
-| `SignalAuditLog.sol` | `0xd745Fc0c28B8755b6280232a179e21C50B1D3adf` | `0xd745Fc0c28B8755b6280232a179e21C50B1D3adf` | `0xd745Fc0c28B8755b6280232a179e21C50B1D3adf` | `0xd745Fc0c28B8755b6280232a179e21C50B1D3adf` |
-| `AgentIdentity.sol` | `0x06036B53A1f8d2Cf691a6f324C0672eB6D865667` | `0x06036B53A1f8d2Cf691a6f324C0672eB6D865667` | `0x06036B53A1f8d2Cf691a6f324C0672eB6D865667` | `0x06036B53A1f8d2Cf691a6f324C0672eB6D865667` |
+| Contract | Mantle mainnet | Arbitrum mainnet | HashKey mainnet |
+|---|---|---|---|
+| `SignalAuditLog.sol` | `0xd745Fc0c28B8755b6280232a179e21C50B1D3adf` | `0x06036B53A1f8d2Cf691a6f324C0672eB6D865667` | `0xd745Fc0c28B8755b6280232a179e21C50B1D3adf` |
+| `AgentIdentity.sol` | `0x06036B53A1f8d2Cf691a6f324C0672eB6D865667` | `0x41D656CC959B6CA547A400F9031321FC405D70ef` | `0x06036B53A1f8d2Cf691a6f324C0672eB6D865667` |
 
-> **Not yet deployed on Mantle mainnet.** The addresses above are only live on Mantle *Sepolia testnet* — Mantle mainnet has no contract at either address. Deploying there is a known pending task, deliberately deferred.
+> **All three chains now have real mainnet contracts.** Mantle and Arbitrum were deployed 2026-07-16, closing out the last chain-deployment gap. Note Arbitrum's addresses do **not** match the other chains' shared pattern — the deployer's Arbitrum nonce was already at 3 from unrelated prior activity, so `SignalAuditLog` landed on the address every other chain uses for `AgentIdentity`. Set via `ARBITRUM_AUDIT_CONTRACT_ADDRESS` / `ARBITRUM_AGENT_IDENTITY_CONTRACT_ADDRESS` overrides (already configured on Railway) — do not assume the shared default addresses apply to Arbitrum. Testnets (Mantle Sepolia, Arbitrum Sepolia, HashKey testnet) also still exist from earlier development, see `contracts/deployments/`.
 
-Deploy: `npx hardhat run scripts/deploy_audit_log.js --network arbitrumSepolia` (swap `--network` for `mantleSepolia` / `hashkeyTestnet` / `hashkey`, then `deploy_agent_identity.js` the same way)
+Deploy: `npx hardhat run scripts/deploy_audit_log.js --network arbitrum` (swap `--network` for `mantle` / `hashkey`, then `deploy_agent_identity.js` the same way)
 
 ---
 
@@ -123,8 +123,8 @@ Deploy: `npx hardhat run scripts/deploy_audit_log.js --network arbitrumSepolia` 
 
 | Chain | Status | Protocols | Execution |
 |---|---|---|---|
-| Mantle | Live | Agni Finance, Merchant Moe, Fluxion | Scout + Execute (audit/identity contracts: testnet only, not yet on mainnet) |
-| Arbitrum | Live | Uniswap V3, Trader Joe, GMX V1 perps | Scout + Execute |
+| Mantle | Live | Agni Finance (verified real pools; Merchant Moe, Fluxion unverified) | Scout + Execute (audit/identity contracts live on mainnet; Execute itself still `BYREAL_DRY_RUN=true`, simulated) |
+| Arbitrum | Live | Uniswap V3, Trader Joe, GMX V1 perps | Scout + Execute (audit/identity contracts live on mainnet, requires `ARBITRUM_*` address overrides — see Contracts) |
 | HashKey Chain | Live | ERC-20 transfer flow monitoring (no DEX with real volume found) | Scout only — flow-monitoring signals don't drive trade execution |
 
 Adding a new chain: add a `ChainConfig` entry in `packages/ingestion/src/chains.py`, set `CHAINS=mantle,arbitrum,hashkey,<new>` — no other code changes needed.
