@@ -48,21 +48,16 @@ log = logging.getLogger(__name__)
 # prior activity there — so it requires the ARBITRUM_* override below; never
 # assume the shared default applies to Arbitrum.
 #
-# Ethereum is a deliberate exception to the "same RPC for ingestion and
-# audit logging" pattern the other three chains use: ingestion watches
-# Ethereum *mainnet* (real Uniswap V3 volume — see chains.py), but
-# SignalAuditLog/AgentIdentity are only deployed on Sepolia *testnet* so far
-# (2026-07-18, staged the same way Mantle/Arbitrum originally were before
-# their mainnet deploys). Pointing this logger at ETHEREUM_RPC_URL (mainnet)
-# would silently target a chain with no deployed contract at that address,
-# so it gets its own ETHEREUM_SEPOLIA_RPC_URL + ETHEREUM_* contract env vars
-# instead of reusing ingestion's mainnet ones. Update these once/if the
-# audit contracts move to Ethereum mainnet.
+# Ethereum (2026-07-18): couldn't get Sepolia testnet ETH for the deployer
+# wallet, so — same as HashKey's original plan before the testnet detour —
+# deploying directly to mainnet instead of staging on testnet first.
+# Ingestion and audit logging both point at Ethereum mainnet via the same
+# ETHEREUM_RPC_URL, same as every other chain.
 _CHAIN_RPC_ENV = {
     "mantle":   ("MANTLE_RPC_URL",   "https://rpc.mantle.xyz"),
     "arbitrum": ("ARBITRUM_RPC_URL", "https://arb1.arbitrum.io/rpc"),
     "hashkey":  ("HASHKEY_RPC_URL",  "https://mainnet.hsk.xyz"),
-    "ethereum": ("ETHEREUM_SEPOLIA_RPC_URL", "https://ethereum-sepolia-rpc.publicnode.com"),
+    "ethereum": ("ETHEREUM_RPC_URL", "https://ethereum.publicnode.com"),
 }
 _CHAIN_CONTRACT_ENV = {
     "mantle":   "AUDIT_CONTRACT_ADDRESS",
@@ -74,7 +69,7 @@ _CHAIN_EXPLORER = {
     "mantle":   "https://explorer.mantle.xyz",
     "arbitrum": "https://arbiscan.io",
     "hashkey":  "https://hsk.blockscout.com",
-    "ethereum": "https://sepolia.etherscan.io",  # testnet explorer — see comment above
+    "ethereum": "https://etherscan.io",
 }
 
 

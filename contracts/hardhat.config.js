@@ -60,10 +60,12 @@ module.exports = {
         : [],
     },
     // Ethereum — added 2026-07-18. Ingestion watches mainnet (real Uniswap
-    // V3 volume — see packages/ingestion/src/chains.py), but
-    // SignalAuditLog/AgentIdentity are staged on Sepolia first, same as
-    // Mantle/Arbitrum originally were, until the deployer wallet is funded
-    // for a mainnet deploy. RPC verified live via eth_chainId before adding.
+    // V3 volume — see packages/ingestion/src/chains.py). SignalAuditLog/
+    // AgentIdentity deploy straight to mainnet too — no Sepolia ETH was
+    // available for the deployer wallet, so the testnet staging step
+    // Mantle/Arbitrum originally used was skipped here. ethereumSepolia
+    // kept below (unused for now) in case it's useful later; RPC verified
+    // live via eth_chainId before adding.
     ethereumSepolia: {
       url: process.env.ETHEREUM_SEPOLIA_RPC_URL || "https://ethereum-sepolia-rpc.publicnode.com",
       chainId: 11155111,

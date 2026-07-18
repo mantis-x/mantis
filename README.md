@@ -88,12 +88,12 @@ make execute                # start Execute agent
 
 ## Contracts
 
-| Contract | Mantle mainnet | Arbitrum mainnet | HashKey mainnet | Ethereum |
+| Contract | Mantle mainnet | Arbitrum mainnet | HashKey mainnet | Ethereum mainnet |
 |---|---|---|---|---|
-| `SignalAuditLog.sol` | `0xd745Fc0c28B8755b6280232a179e21C50B1D3adf` | `0x06036B53A1f8d2Cf691a6f324C0672eB6D865667` | `0xd745Fc0c28B8755b6280232a179e21C50B1D3adf` | pending — Sepolia deploy staged, awaiting deployer wallet funding |
+| `SignalAuditLog.sol` | `0xd745Fc0c28B8755b6280232a179e21C50B1D3adf` | `0x06036B53A1f8d2Cf691a6f324C0672eB6D865667` | `0xd745Fc0c28B8755b6280232a179e21C50B1D3adf` | pending — deployer wallet awaiting mainnet ETH funding |
 | `AgentIdentity.sol` | `0x06036B53A1f8d2Cf691a6f324C0672eB6D865667` | `0x41D656CC959B6CA547A400F9031321FC405D70ef` | `0x06036B53A1f8d2Cf691a6f324C0672eB6D865667` | pending — same as above |
 
-> **Mantle, Arbitrum, HashKey have real mainnet contracts.** Ethereum is a deliberate exception (2026-07-18): ingestion watches Ethereum **mainnet** for real signal volume, but `SignalAuditLog`/`AgentIdentity` deploy to **Sepolia testnet** first — the same staged approach Mantle/Arbitrum originally used — via the `ethereumSepolia` Hardhat network. This means Ethereum's audit-logging RPC/address env vars (`ETHEREUM_SEPOLIA_RPC_URL`, `ETHEREUM_AUDIT_CONTRACT_ADDRESS`, `ETHEREUM_AGENT_IDENTITY_CONTRACT_ADDRESS`) are intentionally decoupled from ingestion's `ETHEREUM_RPC_URL` (mainnet) — do not point them at the same network.
+> **Mantle, Arbitrum, HashKey have real mainnet contracts. Ethereum's are staged for a mainnet deploy** (2026-07-18) — going straight to mainnet rather than staging on Sepolia testnet first like the other three originally did, since no Sepolia ETH was available for the deployer wallet. `ETHEREUM_RPC_URL` drives both ingestion and on-chain audit logging, same as every other chain (no split env vars). Live gas-checked before this decision: Ethereum mainnet gas was ~0.06–0.07 gwei at the time, comparable to Mantle/Arbitrum's cost, not the "expensive L1" assumption that originally justified deferring this.
 >
 > Note Arbitrum's addresses do **not** match the other chains' shared pattern — the deployer's Arbitrum nonce was already at 3 from unrelated prior activity, so `SignalAuditLog` landed on the address every other chain uses for `AgentIdentity`. Set via `ARBITRUM_AUDIT_CONTRACT_ADDRESS` / `ARBITRUM_AGENT_IDENTITY_CONTRACT_ADDRESS` overrides (already configured on Railway) — do not assume the shared default addresses apply to Arbitrum, and check Ethereum's actual deployed addresses once live rather than assuming those either. Testnets (Mantle Sepolia, Arbitrum Sepolia, HashKey testnet) also still exist from earlier development, see `contracts/deployments/`.
 
