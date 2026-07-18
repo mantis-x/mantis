@@ -985,7 +985,7 @@
     <p class="section-label">On-Chain</p>
     <h2>Fully auditable. Forever.</h2>
     <p class="section-intro">
-      Six contracts across three chains — Mantle, Arbitrum, and HashKey Chain, all <strong style="color:var(--green)">mainnet</strong>. Every signal hashed. Every agent decision recorded. Nothing off-chain, nothing hidden. Ethereum ingestion is live too (see Pipeline above) — its audit contracts are staged on Sepolia testnet, pending a mainnet deploy.
+      Eight contracts across four chains — Mantle, Arbitrum, HashKey Chain, and Ethereum, all <strong style="color:var(--green)">mainnet</strong>. Every signal hashed. Every agent decision recorded. Nothing off-chain, nothing hidden.
     </p>
 
     <div class="contracts-grid">
@@ -1049,6 +1049,26 @@
         </div>
         <a class="contract-network live" href="https://hsk.blockscout.com/address/0x06036B53A1f8d2Cf691a6f324C0672eB6D865667" target="_blank" rel="noopener" style="text-decoration:none;">HashKey Chain Mainnet ↗</a>
       </div>
+      <div class="contract-card">
+        <div class="contract-name">SignalAuditLog.sol</div>
+        <div class="contract-purpose">Same audit contract deployed on Ethereum mainnet. Ethereum signals hashed on their native chain. Note: address does not match the other chains' shared pattern — see below.</div>
+        <div class="contract-addr-label">Contract Address · Ethereum Mainnet</div>
+        <div class="contract-addr" onclick="copyAddr(this, 'ETH_SIGNAL_CONTRACT_ADDRESS')" title="Click to copy">
+          <span id="ETH_SIGNAL_CONTRACT_ADDRESS">0x3efa7b94cbB56c9046ffB10a999dB5ba8220DD85</span>
+          <span class="copy-hint">copy</span>
+        </div>
+        <a class="contract-network live" href="https://etherscan.io/address/0x3efa7b94cbB56c9046ffB10a999dB5ba8220DD85" target="_blank" rel="noopener" style="text-decoration:none;">Ethereum Mainnet ↗</a>
+      </div>
+      <div class="contract-card">
+        <div class="contract-name">AgentIdentity.sol</div>
+        <div class="contract-purpose">ERC-8004 agent identity deployed on Ethereum mainnet. No swap executor built for Ethereum yet, so no execution decisions logged here.</div>
+        <div class="contract-addr-label">Contract Address · Ethereum Mainnet</div>
+        <div class="contract-addr" onclick="copyAddr(this, 'ETH_AGENT_CONTRACT_ADDRESS')" title="Click to copy">
+          <span id="ETH_AGENT_CONTRACT_ADDRESS">0x311E456e0A0786b36B6152fbc83cb4078bc0AE13</span>
+          <span class="copy-hint">copy</span>
+        </div>
+        <a class="contract-network live" href="https://etherscan.io/address/0x311E456e0A0786b36B6152fbc83cb4078bc0AE13" target="_blank" rel="noopener" style="text-decoration:none;">Ethereum Mainnet ↗</a>
+      </div>
     </div>
   </div>
 </section>
@@ -1059,9 +1079,9 @@
 <section id="proof">
   <div class="section">
     <p class="section-label">On-Chain Proof</p>
-    <h2>Scout confirmed on mainnet.<br />Across three chains. Verifiable by anyone.</h2>
+    <h2>Scout confirmed on mainnet.<br />Across four chains. Verifiable by anyone.</h2>
     <p class="section-intro">
-      Scout's signal log is confirmed live on all three chains' mainnet. Execute's autonomous-decision proof below is from testnet — Execute itself still runs in simulated/dry-run mode in production (Mantle's <code>byreal-cli</code> execution path isn't installed yet; see Stack). Judges can verify every transaction live.
+      Scout's signal log is confirmed live on all four chains' mainnet. Execute's autonomous-decision proof below is from testnet — Execute itself still runs in simulated/dry-run mode in production (Mantle's <code>byreal-cli</code> execution path isn't installed yet; see Stack). Judges can verify every transaction live.
     </p>
 
     <div class="proof-grid">
@@ -1102,6 +1122,19 @@
           <span class="proof-tx-arrow">↗ View on Explorer</span>
         </a>
         <div class="proof-badge">Confirmed · HashKey Chain Mainnet</div>
+      </div>
+
+      <div class="proof-card">
+        <div class="proof-card-label">Confirmed Transaction · SignalAuditLog.sol · Ethereum Mainnet</div>
+        <div class="proof-card-title">First Signal Logged — On-Chain (Ethereum, live mainnet)</div>
+        <div class="proof-card-desc">
+          Mantis Scout logged its first signal hash to SignalAuditLog.sol on Ethereum mainnet — chain_id 1, real ETH gas (~$0.35 total for both contracts + this smoke test, live gas-checked before deploying). AgentIdentity.sol is also deployed there; no swap executor built for Ethereum yet, so no execution decisions have been logged.
+        </div>
+        <a class="proof-tx" href="https://etherscan.io/tx/0x2840985da7958a4ee2cc952d96dd743ad2ec219a1e3587da5ea38f39cff56d46" target="_blank" rel="noopener">
+          <span>0x2840985da7… · logSignal "agni_finance" accumulation</span>
+          <span class="proof-tx-arrow">↗ View on Explorer</span>
+        </a>
+        <div class="proof-badge">Confirmed · Ethereum Mainnet</div>
       </div>
 
       <div class="proof-card">
@@ -1158,7 +1191,7 @@
       </div>
 
       <div class="proof-card full-width">
-        <div class="proof-card-label">ERC-8004 Agent Identity · Mantle Mainnet · Arbitrum Mainnet · HashKey Chain Mainnet</div>
+        <div class="proof-card-label">ERC-8004 Agent Identity · Mantle Mainnet · Arbitrum Mainnet · HashKey Chain Mainnet · Ethereum Mainnet</div>
         <div class="proof-card-title">AgentIdentity.sol — On-Chain Reputation Ledger</div>
         <div class="proof-card-desc">
           Every Mantis Execute agent is issued an ERC-8004 identity NFT on Mantle. Every decision — execute, abort, guard-reject — is logged permanently. No silent failures. No black box. Agents build a verifiable reputation over time.
@@ -1195,6 +1228,18 @@
           <a class="proof-tx" href="https://hsk.blockscout.com/address/0xd745Fc0c28B8755b6280232a179e21C50B1D3adf" target="_blank" rel="noopener">
             <span>0xd745Fc0c28B8755b6280232a179e21C50B1D3adf · SignalAuditLog · HashKey Chain Mainnet</span>
             <span class="proof-tx-arrow">↗ View on Explorer</span>
+          </a>
+        </div>
+        <div style="margin-top:0.75rem">
+          <a class="proof-tx" href="https://etherscan.io/address/0x311E456e0A0786b36B6152fbc83cb4078bc0AE13" target="_blank" rel="noopener">
+            <span>0x311E456e0A0786b36B6152fbc83cb4078bc0AE13 · AgentIdentity · Ethereum Mainnet</span>
+            <span class="proof-tx-arrow">↗ View Contract</span>
+          </a>
+        </div>
+        <div style="margin-top:0.75rem">
+          <a class="proof-tx" href="https://etherscan.io/address/0x3efa7b94cbB56c9046ffB10a999dB5ba8220DD85" target="_blank" rel="noopener">
+            <span>0x3efa7b94cbB56c9046ffB10a999dB5ba8220DD85 · SignalAuditLog · Ethereum Mainnet</span>
+            <span class="proof-tx-arrow">↗ View Contract</span>
           </a>
         </div>
       </div>

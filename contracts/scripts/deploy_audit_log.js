@@ -25,12 +25,12 @@ async function main() {
   console.log("──────────────────────────────────────────");
   console.log(`  Network:   ${network.name} (chainId ${network.config.chainId})`);
   console.log(`  Deployer:  ${deployer.address}`);
-  console.log(`  Balance:   ${ethers.formatEther(balance)} MNT`);
+  console.log(`  Balance:   ${ethers.formatEther(balance)} (native token)`);
   console.log(`  Logger:    ${loggerAddr}`);
   console.log("──────────────────────────────────────────\n");
 
   if (balance === 0n) {
-    throw new Error("Deployer wallet has 0 MNT. Fund it from the Mantle Sepolia faucet first.");
+    throw new Error(`Deployer wallet has 0 balance on ${network.name}. Fund it first.`);
   }
 
   // ── Deploy ─────────────────────────────────────────────────────────────
@@ -101,9 +101,21 @@ async function main() {
   fs.writeFileSync(outPath, JSON.stringify(receipt, null, 2));
 
   // ── Instructions ───────────────────────────────────────────────────────
-  const explorerBase = network.name === "mantle"
-    ? "https://explorer.mantle.xyz"
-    : "https://explorer.sepolia.mantle.xyz";
+  // Was hardcoded to Mantle's two explorers only, so any other network
+  // (arbitrum, hashkey, ethereum, ...) printed a wrong Mantle-Sepolia link
+  // in this console output — cosmetic only, didn't affect the deployment
+  // or the saved receipt.json. Generalized ahead of the Ethereum deploy.
+  const EXPLORERS = {
+    mantle:         "https://explorer.mantle.xyz",
+    mantleSepolia:  "https://explorer.sepolia.mantle.xyz",
+    arbitrum:       "https://arbiscan.io",
+    arbitrumSepolia:"https://sepolia.arbiscan.io",
+    hashkey:        "https://hsk.blockscout.com",
+    hashkeyTestnet: "https://testnet.hsk.blockscout.com",
+    ethereum:       "https://etherscan.io",
+    ethereumSepolia:"https://sepolia.etherscan.io",
+  };
+  const explorerBase = EXPLORERS[network.name] || "https://explorer.mantle.xyz";
 
   console.log(`\n  ✓ Receipt saved: ${outPath}`);
   console.log(`\n  Explorer: ${explorerBase}/address/${address}`);
