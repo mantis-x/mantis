@@ -2,7 +2,7 @@
 Discord command handlers for Mantis Scout bot.
 
 Commands (prefix "!"):
-  !subscribe [chain]   — subscribe this channel (chain: mantle | arbitrum | hashkey | all)
+  !subscribe [chain]   — subscribe this channel (chain: mantle | arbitrum | hashkey | ethereum | all)
   !unsubscribe         — unsubscribe
   !status              — bot + market status
   !history             — last 5 signals
@@ -23,23 +23,23 @@ from src.audit.on_chain_logger import get_explorer_contract_url
 
 log = logging.getLogger(__name__)
 
-SUPPORTED_CHAINS = {"mantle", "arbitrum", "hashkey"}
-_CHAIN_LABEL = {"mantle": "Mantle", "arbitrum": "Arbitrum", "hashkey": "HashKey Chain"}
+SUPPORTED_CHAINS = {"mantle", "arbitrum", "hashkey", "ethereum"}
+_CHAIN_LABEL = {"mantle": "Mantle", "arbitrum": "Arbitrum", "hashkey": "HashKey Chain", "ethereum": "Ethereum"}
 
 WELCOME_MSG = """**Welcome to Mantis Scout**
 
-I monitor Mantle, Arbitrum & HashKey Chain DeFi 24/7 and alert you when smart money moves.
+I monitor Mantle, Arbitrum, HashKey Chain & Ethereum DeFi 24/7 and alert you when smart money moves.
 
 **What I detect:**
   Smart money accumulation
   Whale entries / exits
   Unusual volume spikes
 
-**Chains:** Mantle · Arbitrum · HashKey Chain
+**Chains:** Mantle · Arbitrum · HashKey Chain · Ethereum
 Every signal is hashed on-chain — fully auditable.
 
 Use `!subscribe` to receive alerts from all chains.
-Use `!subscribe mantle`, `!subscribe arbitrum`, or `!subscribe hashkey` to filter by chain.
+Use `!subscribe mantle`, `!subscribe arbitrum`, `!subscribe hashkey`, or `!subscribe ethereum` to filter by chain.
 Use `!help` to see all commands.
 
 Free tier: 3 alerts/day · No credit card needed"""
@@ -47,7 +47,7 @@ Free tier: 3 alerts/day · No credit card needed"""
 
 HELP_MSG = """**Mantis Scout — Commands**
 
-`!subscribe [chain]`  Start receiving signals (chain: mantle | arbitrum | hashkey | all)
+`!subscribe [chain]`  Start receiving signals (chain: mantle | arbitrum | hashkey | ethereum | all)
 `!unsubscribe`        Stop receiving signals
 `!status`             Bot status and stats
 `!history`            Last 5 signals
@@ -59,6 +59,7 @@ HELP_MSG = """**Mantis Scout — Commands**
   `!subscribe mantle`    → Mantle only
   `!subscribe arbitrum`  → Arbitrum only
   `!subscribe hashkey`   → HashKey Chain only
+  `!subscribe ethereum`  → Ethereum only
 
 **Free tier:** 3 alerts/day
 **Pro tier:** Unlimited alerts + Execute agent
@@ -72,7 +73,7 @@ def _parse_chain_arg(arg: str) -> tuple:
         return None, "all chains", None
     if arg in SUPPORTED_CHAINS:
         return {arg}, arg, None
-    return "invalid", arg, f"Unknown chain `{arg}`. Supported: `mantle`, `arbitrum`, `hashkey`, or leave blank for all."
+    return "invalid", arg, f"Unknown chain `{arg}`. Supported: `mantle`, `arbitrum`, `hashkey`, `ethereum`, or leave blank for all."
 
 
 def register_handlers(bot, sub_manager: SubscriptionManager, stats: dict, redis_url: str = "") -> None:
@@ -94,7 +95,7 @@ def register_handlers(bot, sub_manager: SubscriptionManager, stats: dict, redis_
             msg = (
                 f"**Subscribed!** Receiving signals from **{display}**.\n\n"
                 "Free tier: 3 alerts/day.\n\n"
-                "Use `!subscribe mantle`, `!subscribe arbitrum`, or `!subscribe hashkey` to filter by chain.\n"
+                "Use `!subscribe mantle`, `!subscribe arbitrum`, `!subscribe hashkey`, or `!subscribe ethereum` to filter by chain.\n"
                 "Use `!unsubscribe` to stop at any time."
             )
         else:
@@ -129,7 +130,7 @@ def register_handlers(bot, sub_manager: SubscriptionManager, stats: dict, redis_
     async def verify(ctx, signal_id: str = "") -> None:
         links = "\n".join(
             f"{_CHAIN_LABEL[c]}: {get_explorer_contract_url(c)}"
-            for c in ("mantle", "arbitrum", "hashkey")
+            for c in ("mantle", "arbitrum", "hashkey", "ethereum")
             if get_explorer_contract_url(c)
         )
 

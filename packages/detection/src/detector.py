@@ -94,6 +94,14 @@ def _build_synthetic_history() -> list:
         ("hashkey", "0xf1b50ed67a9e2cc94ad3c477779e2d4cbfff9029",       25,      15, ("transfer",)),
         ("hashkey", "0xefd4bc9afd210517803f293ababd701caeecdfd0",       35,      20, ("transfer",)),
         ("hashkey", "0xb210d2120d57b758ee163cffb43e73728c471cf1",        5,       8, ("transfer",)),
+        # Ethereum mainnet — blue-chip Uniswap V3 pools (2026-07-18). Mean/std
+        # extrapolated from a real (not assumed) ~20-block/~4min sample of
+        # decoded Swap amounts via eth_getLogs — see chains.py's ETHEREUM
+        # comment for pool verification. Short sample, so treat as a rough
+        # order-of-magnitude calibration, same caveat as Arbitrum's figures.
+        ("ethereum", "0x88e6a0c2ddd26feeb64f039a2c41296fcb3f5640", 1_200_000, 350_000, ("swap", "mint")),  # USDC/WETH 0.05%
+        ("ethereum", "0x11b815efb8f581194ae79006d24e0d814b7697f6",   250_000,  70_000, ("swap", "mint")),  # WETH/USDT 0.05%
+        ("ethereum", "0x4585fe77225b41b697c938b018e2ac67ac5a20c0",    80_000,  25_000, ("swap", "mint")),  # WBTC/WETH 0.05%
     ]
 
     for chain, pool, mean_usd, std_usd, event_types in pools:

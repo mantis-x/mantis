@@ -12,6 +12,7 @@ Chain filter examples:
   subscribe mantle       → Mantle only
   subscribe arbitrum     → Arbitrum only
   subscribe hashkey      → HashKey Chain only
+  subscribe ethereum     → Ethereum only
 """
 from __future__ import annotations
 
@@ -27,19 +28,19 @@ from src.audit.on_chain_logger import get_explorer_contract_url
 
 log = logging.getLogger(__name__)
 
-SUPPORTED_CHAINS = {"mantle", "arbitrum", "hashkey"}
-_CHAIN_LABEL = {"mantle": "Mantle", "arbitrum": "Arbitrum", "hashkey": "HashKey Chain"}
+SUPPORTED_CHAINS = {"mantle", "arbitrum", "hashkey", "ethereum"}
+_CHAIN_LABEL = {"mantle": "Mantle", "arbitrum": "Arbitrum", "hashkey": "HashKey Chain", "ethereum": "Ethereum"}
 
 WELCOME_MSG = """Welcome to Mantis Scout!
 
-I monitor Mantle, Arbitrum & HashKey Chain DeFi 24/7 and alert you when smart money moves.
+I monitor Mantle, Arbitrum, HashKey Chain & Ethereum DeFi 24/7 and alert you when smart money moves.
 
 What I detect:
   - Smart money accumulation
   - Whale entries / exits
   - Unusual volume spikes
 
-Chains: Mantle · Arbitrum · HashKey Chain
+Chains: Mantle · Arbitrum · HashKey Chain · Ethereum
 Every signal is hashed on-chain — fully auditable.
 
 You're now subscribed (all chains). Send "help" to see all commands.
@@ -47,7 +48,7 @@ Free tier: 3 alerts/day · No credit card needed"""
 
 HELP_MSG = """Mantis Scout — Commands
 
-subscribe [chain]  Start receiving signals (chain: mantle | arbitrum | hashkey | all)
+subscribe [chain]  Start receiving signals (chain: mantle | arbitrum | hashkey | ethereum | all)
 unsubscribe        Stop receiving signals
 status             Bot status and stats
 history            Last 5 signals
@@ -59,6 +60,7 @@ Chain filter examples:
   subscribe mantle       (Mantle only)
   subscribe arbitrum     (Arbitrum only)
   subscribe hashkey      (HashKey Chain only)
+  subscribe ethereum     (Ethereum only)
 
 Free tier: 3 alerts/day
 Pro tier: Unlimited alerts + Execute agent
@@ -72,7 +74,7 @@ def _parse_chain_arg(arg: str) -> tuple:
         return None, "all chains", None
     if arg in SUPPORTED_CHAINS:
         return {arg}, arg, None
-    return "invalid", arg, f'Unknown chain "{arg}". Supported: mantle, arbitrum, hashkey, or leave blank for all.'
+    return "invalid", arg, f'Unknown chain "{arg}". Supported: mantle, arbitrum, hashkey, ethereum, or leave blank for all.'
 
 
 def handle_follow(user_id: str, sub_manager: SubscriptionManager) -> str:
@@ -102,7 +104,7 @@ async def handle_text(text: str, user_id: str, sub_manager: SubscriptionManager,
             return (
                 f"Subscribed! Receiving signals from {display}.\n"
                 "Free tier: 3 alerts/day.\n\n"
-                'Send "subscribe mantle", "subscribe arbitrum", or "subscribe hashkey" to filter by chain.\n'
+                'Send "subscribe mantle", "subscribe arbitrum", "subscribe hashkey", or "subscribe ethereum" to filter by chain.\n'
                 'Send "unsubscribe" to stop at any time.'
             )
         return f'Chain filter updated → {display}.'
@@ -126,7 +128,7 @@ async def handle_text(text: str, user_id: str, sub_manager: SubscriptionManager,
     if command == "verify":
         links = "\n".join(
             f"{_CHAIN_LABEL[c]}: {get_explorer_contract_url(c)}"
-            for c in ("mantle", "arbitrum", "hashkey")
+            for c in ("mantle", "arbitrum", "hashkey", "ethereum")
             if get_explorer_contract_url(c)
         )
 

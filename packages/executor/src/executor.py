@@ -155,7 +155,16 @@ class Executor:
             return ExecutionResult.aborted(request, reason=f"Unexpected: {exc}")
 
     def _do_swap(self, request: ExecutionRequest) -> dict:
-        """Execute a token swap — routes to Arbitrum or Mantle based on request.chain."""
+        """
+        Execute a token swap — routes to Arbitrum or Mantle based on
+        request.chain. Any other chain raises rather than silently falling
+        through to the Mantle/Byreal path, which was the previous behavior
+        (a documented residual gap for HashKey — see Completed Work #9 in
+        PROJECT_STATE.md — that this closes for real rather than extending
+        it to a second chain). Harmless today since neither HashKey nor
+        Ethereum signals drive execution yet, but "harmless today" is
+        exactly how the original gap was described too.
+        """
         if request.chain == "arbitrum":
             # Arbitrum: Uniswap V3 via ArbitrumSwapExecutor
             token_in  = request.input_token  or "0xFF970A61A04b1cA14834A43f5dE4533eBDDB5CC8"  # USDC.e
@@ -169,6 +178,12 @@ class Executor:
                 token_out  = token_out,
                 amount_usd = request.amount_usd,
                 slippage   = request.max_slippage,
+            )
+
+        if request.chain != "mantle":
+            raise ValueError(
+                f"No swap executor wired up for chain={request.chain!r} — "
+                "only 'mantle' (Byreal) and 'arbitrum' (Uniswap V3) are supported"
             )
 
         # Mantle: Byreal CLI
@@ -195,6 +210,8 @@ class Executor:
         try:
             if chain == "arbitrum":
                 return self.arb_executor.get_wallet_balance_usd()
+            if chain != "mantle":
+                raise ValueError(f"No wallet-balance lookup wired up for chain={chain!r}")
             return float(self.byreal.wallet_balance().get("balance_usd", 0.0))
         except Exception as exc:
             log.warning(

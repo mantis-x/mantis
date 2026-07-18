@@ -18,12 +18,13 @@ import time
 # Allow importing from ingestion package without installing it
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "packages", "ingestion", "src"))
 
-from chains import ChainConfig, get_enabled_chains, MANTLE, ARBITRUM
-
-ALL_CHAINS: dict[str, ChainConfig] = {
-    "mantle":   MANTLE,
-    "arbitrum": ARBITRUM,
-}
+# Previously this file defined its own local ALL_CHAINS = {"mantle": ...,
+# "arbitrum": ...} instead of importing the real registry from chains.py —
+# meaning --chain hashkey (and now --chain ethereum) failed with "unknown
+# chain" even though both were properly registered in chains.py. Found
+# while documenting `--chain mantle,arbitrum,hashkey,ethereum` in README.md
+# and realizing that command would have been actively wrong.
+from chains import ALL_CHAINS, ChainConfig, get_enabled_chains
 
 # Block age threshold for a "stale" chain (seconds)
 STALE_BLOCK_SECONDS = 120

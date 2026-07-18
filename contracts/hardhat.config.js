@@ -59,5 +59,24 @@ module.exports = {
         ? [process.env.DEPLOYER_PRIVATE_KEY]
         : [],
     },
+    // Ethereum — added 2026-07-18. Ingestion watches mainnet (real Uniswap
+    // V3 volume — see packages/ingestion/src/chains.py), but
+    // SignalAuditLog/AgentIdentity are staged on Sepolia first, same as
+    // Mantle/Arbitrum originally were, until the deployer wallet is funded
+    // for a mainnet deploy. RPC verified live via eth_chainId before adding.
+    ethereumSepolia: {
+      url: process.env.ETHEREUM_SEPOLIA_RPC_URL || "https://ethereum-sepolia-rpc.publicnode.com",
+      chainId: 11155111,
+      accounts: process.env.DEPLOYER_PRIVATE_KEY
+        ? [process.env.DEPLOYER_PRIVATE_KEY]
+        : [],
+    },
+    ethereum: {
+      url: process.env.ETHEREUM_RPC_URL || "https://ethereum.publicnode.com",
+      chainId: 1,
+      accounts: process.env.DEPLOYER_PRIVATE_KEY
+        ? [process.env.DEPLOYER_PRIVATE_KEY]
+        : [],
+    },
   },
 };

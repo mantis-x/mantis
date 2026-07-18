@@ -285,12 +285,81 @@ HASHKEY = ChainConfig(
 )
 
 
+# ── Ethereum ─────────────────────────────────────────────────────────────────
+#
+# Blue-chip Uniswap V3 pools only (2026-07-18), verified before adding —
+# same discipline as the Mantle Agni-pool fix. Pool addresses came from the
+# real Uniswap V3 Factory (0x1F98431c...) via getPool(), then confirmed live
+# via eth_getLogs Swap-topic hits (WETH/USDC and WETH/USDT both swap nearly
+# every block; WBTC/WETH had 8 real swaps in a 40-block/~8min window — all
+# genuinely active, not guessed). Token0/token1 ordering read directly from
+# each pool's token0()/token1(), not inferred from address comparison.
+# Token addresses + decimals verified via symbol()/decimals(). Chainlink
+# feed addresses verified via get_code() + description() before being added
+# below — same rule as every other chain's price_feeds block.
+#
+# NOTE: free public Ethereum RPCs are far stricter on eth_getLogs than
+# Mantle/Arbitrum's — during verification, ethereum.publicnode.com rejected
+# any multi-block range on these pools as an "archive request," and 1rpc.io
+# capped ranges at 10-50 blocks depending on the call. max_blocks_per_batch
+# is set conservatively below; if ingestion sees rate-limit/archive errors
+# in production, a paid RPC key will likely be needed sooner than it was
+# for Arbitrum.
+_ETH_WETH = TokenMeta("0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2", "eth",  18)
+_ETH_USDC = TokenMeta("0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48", "usdc", 6)
+_ETH_USDT = TokenMeta("0xdac17f958d2ee523a2206206994597c13d831ec7", "usdt", 6)
+_ETH_WBTC = TokenMeta("0x2260fac5e5542a773aa44fbcfedf7c193bc2c599", "wbtc", 8)
+
+ETHEREUM = ChainConfig(
+    name="ethereum",
+    chain_id=1,
+    rpc_env="ETHEREUM_RPC_URL",
+    default_rpc="https://ethereum.publicnode.com",
+    explorer_base="https://etherscan.io",
+    poa_middleware=False,
+    poll_interval_s=15,
+    max_blocks_per_batch=20,
+    native_token="eth",
+    pool_registry={
+        # USDC (0xA0b8) < WETH (0xC02a) → token0=USDC, token1=WETH
+        "0x88e6a0c2ddd26feeb64f039a2c41296fcb3f5640": PoolMeta(
+            "uniswap_v3", token0=_ETH_USDC, token1=_ETH_WETH,   # USDC/WETH 0.05%
+        ),
+        # WETH (0xC02a) < USDT (0xdAC1) → token0=WETH, token1=USDT
+        "0x11b815efb8f581194ae79006d24e0d814b7697f6": PoolMeta(
+            "uniswap_v3", token0=_ETH_WETH, token1=_ETH_USDT,   # WETH/USDT 0.05%
+        ),
+        # WBTC (0x2260) < WETH (0xC02a) → token0=WBTC, token1=WETH
+        "0x4585fe77225b41b697c938b018e2ac67ac5a20c0": PoolMeta(
+            "uniswap_v3", token0=_ETH_WBTC, token1=_ETH_WETH,   # WBTC/WETH 0.05%
+        ),
+    },
+    token_prices={
+        # Static fallback only — overridden at runtime by price_feeds below.
+        # Spot-checked via CoinGecko 2026-07-18.
+        "eth":  1841.0,
+        "wbtc": 64082.0,
+        "usdc": 1.0,
+        "usdt": 1.0,
+    },
+    price_feeds={
+        # Chainlink AggregatorV3 feeds on Ethereum mainnet — each verified
+        # via get_code() + description() before being added here.
+        "eth":  "0x5f4eC3Df9cbd43714FE2740f5E3616155c5b8419",  # ETH / USD
+        "wbtc": "0xF4030086522a5bEEa4988F8cA5B36dbC97BeE88c",  # BTC / USD
+        "usdc": "0x8fFfFfd4AfB6115b954Bd326cbe7B4BA576818f6",  # USDC / USD
+        "usdt": "0x3E7d1eAB13ad0104d2750B8863b489D65364e32D",  # USDT / USD
+    },
+)
+
+
 # ── Registry ──────────────────────────────────────────────────────────────────
 
 ALL_CHAINS: dict[str, ChainConfig] = {
     "mantle":   MANTLE,
     "arbitrum": ARBITRUM,
     "hashkey":  HASHKEY,
+    "ethereum": ETHEREUM,
 }
 
 

@@ -54,11 +54,13 @@ _CHAIN_DISPLAY = {
     "mantle":   "Mantle",
     "arbitrum": "Arbitrum",
     "hashkey":  "HashKey Chain",
+    "ethereum": "Ethereum",
 }
 _CHAIN_POOL_COUNTS = {
     "mantle":   11,
     "arbitrum": 9,
     "hashkey":  3,
+    "ethereum": 3,
 }
 _enabled_chains = [c.strip().lower() for c in os.getenv("CHAINS", "mantle").split(",") if c.strip()]
 _chains_label   = " · ".join(_CHAIN_DISPLAY.get(c, c.capitalize()) for c in _enabled_chains) or "Mantle"

@@ -41,6 +41,7 @@ CHAIN_META = {
     "mantle":   ("https://explorer.mantle.xyz",  "Mantle"),
     "arbitrum": ("https://arbiscan.io",           "Arbitrum"),
     "hashkey":  ("https://hsk.blockscout.com",    "HashKey Chain"),
+    "ethereum": ("https://etherscan.io",          "Ethereum"),
 }
 
 

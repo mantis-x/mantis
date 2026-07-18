@@ -23,20 +23,31 @@ log = logging.getLogger(__name__)
 # because the deployer wallet used the same nonce sequence on every chain so
 # far, which makes the CREATE address identical across chains — but each
 # chain gets its own override env var in case a future deploy diverges.
+#
+# Ethereum's AgentIdentity is Sepolia-testnet-only for now (ingestion runs
+# on mainnet, contracts staged on testnet — see on_chain_logger.py's
+# matching comment), so it gets its own ETHEREUM_SEPOLIA_RPC_URL rather
+# than reusing ingestion's mainnet ETHEREUM_RPC_URL. In practice Execute
+# doesn't run on Ethereum yet (no swap executor built for it), so this
+# entry mainly exists so a future call doesn't silently fall through to
+# the Mantle/shared default.
 _CHAIN_RPC_ENV = {
     "mantle":   ("MANTLE_RPC_URL",   "https://rpc.mantle.xyz"),
     "arbitrum": ("ARBITRUM_RPC_URL", "https://arb1.arbitrum.io/rpc"),
     "hashkey":  ("HASHKEY_RPC_URL",  "https://mainnet.hsk.xyz"),
+    "ethereum": ("ETHEREUM_SEPOLIA_RPC_URL", "https://ethereum-sepolia-rpc.publicnode.com"),
 }
 _CHAIN_CONTRACT_ENV = {
     "mantle":   "AGENT_IDENTITY_CONTRACT_ADDRESS",
     "arbitrum": "ARBITRUM_AGENT_IDENTITY_CONTRACT_ADDRESS",
     "hashkey":  "HASHKEY_AGENT_IDENTITY_CONTRACT_ADDRESS",
+    "ethereum": "ETHEREUM_AGENT_IDENTITY_CONTRACT_ADDRESS",
 }
 _CHAIN_EXPLORER = {
     "mantle":   "https://explorer.mantle.xyz",
     "arbitrum": "https://arbiscan.io",
     "hashkey":  "https://hsk.blockscout.com",
+    "ethereum": "https://sepolia.etherscan.io",
 }
 
 # AgentIdentity.sol ABI — only the functions we call

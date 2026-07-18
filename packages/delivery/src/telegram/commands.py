@@ -3,7 +3,7 @@ Telegram command handlers for Mantis Scout bot.
 
 Commands:
   /start                — welcome + subscribe
-  /subscribe [chain]    — subscribe (optional chain filter: mantle | arbitrum | hashkey | all)
+  /subscribe [chain]    — subscribe (optional chain filter: mantle | arbitrum | hashkey | ethereum | all)
   /unsubscribe          — unsubscribe
   /status               — bot + market status
   /history              — last 5 signals
@@ -27,23 +27,23 @@ from src.audit.on_chain_logger import get_explorer_contract_url
 
 log = logging.getLogger(__name__)
 
-SUPPORTED_CHAINS = {"mantle", "arbitrum", "hashkey"}
-_CHAIN_LABEL = {"mantle": "Mantle", "arbitrum": "Arbitrum", "hashkey": "HashKey Chain"}
+SUPPORTED_CHAINS = {"mantle", "arbitrum", "hashkey", "ethereum"}
+_CHAIN_LABEL = {"mantle": "Mantle", "arbitrum": "Arbitrum", "hashkey": "HashKey Chain", "ethereum": "Ethereum"}
 
 WELCOME_MSG = """🦟 <b>Welcome to Mantis Scout</b>
 
-I monitor Mantle, Arbitrum &amp; HashKey Chain DeFi 24/7 and alert you when smart money moves.
+I monitor Mantle, Arbitrum, HashKey Chain &amp; Ethereum DeFi 24/7 and alert you when smart money moves.
 
 <b>What I detect:</b>
   📈 Smart money accumulation
   🐋 Whale entries / exits
   ⚡ Unusual volume spikes
 
-<b>Chains:</b> Mantle · Arbitrum · HashKey Chain
+<b>Chains:</b> Mantle · Arbitrum · HashKey Chain · Ethereum
 <b>Every signal is hashed on-chain — fully auditable.</b>
 
 Use /subscribe to receive alerts from all chains.
-Use /subscribe mantle, /subscribe arbitrum, or /subscribe hashkey to filter by chain.
+Use /subscribe mantle, /subscribe arbitrum, /subscribe hashkey, or /subscribe ethereum to filter by chain.
 Use /help to see all commands.
 
 Free tier: 3 alerts/day · No credit card needed"""
@@ -51,7 +51,7 @@ Free tier: 3 alerts/day · No credit card needed"""
 
 HELP_MSG = """🦟 <b>Mantis Scout — Commands</b>
 
-/subscribe [chain]  Start receiving signals (chain: mantle | arbitrum | hashkey | all)
+/subscribe [chain]  Start receiving signals (chain: mantle | arbitrum | hashkey | ethereum | all)
 /unsubscribe        Stop receiving signals
 /status             Bot status and stats
 /history            Last 5 signals
@@ -63,6 +63,7 @@ HELP_MSG = """🦟 <b>Mantis Scout — Commands</b>
   /subscribe mantle    → Mantle only
   /subscribe arbitrum  → Arbitrum only
   /subscribe hashkey   → HashKey Chain only
+  /subscribe ethereum  → Ethereum only
 
 <b>Free tier:</b> 3 alerts/day
 <b>Pro tier:</b> Unlimited alerts + Execute agent
@@ -102,7 +103,7 @@ def register_handlers(app, sub_manager: SubscriptionManager, stats: dict, redis_
         if chains == "invalid":
             await update.message.reply_html(
                 f"Unknown chain <b>{display}</b>.\n"
-                "Supported: <code>mantle</code>, <code>arbitrum</code>, <code>hashkey</code>, or leave blank for all.\n"
+                "Supported: <code>mantle</code>, <code>arbitrum</code>, <code>hashkey</code>, <code>ethereum</code>, or leave blank for all.\n"
                 "Example: /subscribe arbitrum"
             )
             return
@@ -114,7 +115,7 @@ def register_handlers(app, sub_manager: SubscriptionManager, stats: dict, redis_
             msg = (
                 f"✅ <b>Subscribed!</b> Receiving signals from <b>{display}</b>.\n\n"
                 "Free tier: 3 alerts/day.\n\n"
-                "Use /subscribe mantle, /subscribe arbitrum, or /subscribe hashkey to filter by chain.\n"
+                "Use /subscribe mantle, /subscribe arbitrum, /subscribe hashkey, or /subscribe ethereum to filter by chain.\n"
                 "Use /unsubscribe to stop at any time."
             )
         else:
@@ -146,7 +147,7 @@ def register_handlers(app, sub_manager: SubscriptionManager, stats: dict, redis_
         if not args:
             links = "\n".join(
                 f"• <a href='{get_explorer_contract_url(c)}'>{_CHAIN_LABEL[c]}</a>"
-                for c in ("mantle", "arbitrum", "hashkey")
+                for c in ("mantle", "arbitrum", "hashkey", "ethereum")
                 if get_explorer_contract_url(c)
             )
             await update.message.reply_html(
@@ -166,7 +167,7 @@ def register_handlers(app, sub_manager: SubscriptionManager, stats: dict, redis_
         if signal is None:
             links = "\n".join(
                 f"• <a href='{get_explorer_contract_url(c)}'>{_CHAIN_LABEL[c]}</a>"
-                for c in ("mantle", "arbitrum", "hashkey")
+                for c in ("mantle", "arbitrum", "hashkey", "ethereum")
                 if get_explorer_contract_url(c)
             )
             msg = (
