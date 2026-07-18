@@ -152,8 +152,9 @@ def register_handlers(app, sub_manager: SubscriptionManager, stats: dict, redis_
             await update.message.reply_html(
                 "Usage: /verify &lt;signal_id&gt;\n"
                 "Example: /verify 42\n\n"
-                "Every signal is hashed on its origin chain. Give a signal ID "
-                "and I'll look up the right one, or browse SignalAuditLog directly:\n"
+                "Find the ID on the alert itself (🆔 Signal #…) or with /history. "
+                "Every signal is hashed on its origin chain — give an ID and I'll "
+                "look up the right one, or browse SignalAuditLog directly:\n"
                 f"{links}",
                 disable_web_page_preview=True,
             )

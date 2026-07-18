@@ -137,8 +137,9 @@ def register_handlers(bot, sub_manager: SubscriptionManager, stats: dict, redis_
             await ctx.send(
                 "Usage: `!verify <signal_id>`\n"
                 "Example: `!verify 42`\n\n"
-                "Every signal is hashed on its origin chain. Give a signal ID "
-                f"and I'll look up the right one, or browse SignalAuditLog directly:\n{links}"
+                "Find the ID on the alert itself (🆔 Signal #…) or with `!history`. "
+                "Every signal is hashed on its origin chain — give an ID and I'll "
+                f"look up the right one, or browse SignalAuditLog directly:\n{links}"
             )
             return
 

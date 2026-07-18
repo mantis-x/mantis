@@ -40,6 +40,7 @@ SIGNAL_LABELS = {
 CHAIN_META = {
     "mantle":   ("https://explorer.mantle.xyz",  "Mantle"),
     "arbitrum": ("https://arbiscan.io",           "Arbitrum"),
+    "hashkey":  ("https://hsk.blockscout.com",    "HashKey Chain"),
 }
 
 
@@ -67,6 +68,7 @@ def format_usd(amount: float) -> str:
 
 def format_signal_card(signal: dict, audit_tx_hash: Optional[str] = None) -> str:
     """Format a signal dict into a Telegram HTML message card."""
+    signal_id    = signal.get("id")
     signal_type  = signal.get("signal_type", "unusual_volume")
     chain        = signal.get("chain", "mantle")
     protocol     = signal.get("protocol", "unknown")
@@ -108,10 +110,13 @@ def format_signal_card(signal: dict, audit_tx_hash: Optional[str] = None) -> str
         lines.append("")
 
     if audit_tx_hash:
-        audit_url = f"https://explorer.mantle.xyz/tx/{audit_tx_hash}"
+        audit_url = f"{explorer_base}/tx/{audit_tx_hash}"
         lines.append(f"🔐 <b>On-chain proof</b>  <a href='{audit_url}'>verify signal</a>")
     else:
         lines.append(f"🔐 <b>Pool</b>  <a href='{explorer_url}'>{pool_short}</a>")
+
+    if signal_id is not None:
+        lines.append(f"🆔 Signal #{signal_id} — verify anytime with <code>/verify {signal_id}</code>")
 
     lines.append("")
     lines.append("⚠️ <i>Not financial advice. DYOR.</i>")
@@ -122,6 +127,7 @@ def format_signal_card(signal: dict, audit_tx_hash: Optional[str] = None) -> str
 
 def format_signal_card_markdown(signal: dict, audit_tx_hash: Optional[str] = None) -> str:
     """Format a signal dict for Discord (Markdown bold, no HTML)."""
+    signal_id    = signal.get("id")
     signal_type  = signal.get("signal_type", "unusual_volume")
     chain        = signal.get("chain", "mantle")
     protocol     = signal.get("protocol", "unknown")
@@ -163,10 +169,13 @@ def format_signal_card_markdown(signal: dict, audit_tx_hash: Optional[str] = Non
         lines.append("")
 
     if audit_tx_hash:
-        audit_url = f"https://explorer.mantle.xyz/tx/{audit_tx_hash}"
+        audit_url = f"{explorer_base}/tx/{audit_tx_hash}"
         lines.append(f"🔐 **On-chain proof**  verify signal: {audit_url}")
     else:
         lines.append(f"🔐 **Pool** {pool_short}  {explorer_url}")
+
+    if signal_id is not None:
+        lines.append(f"🆔 Signal #{signal_id} — verify anytime with `!verify {signal_id}`")
 
     lines.append("")
     lines.append("⚠️ _Not financial advice. DYOR._")
@@ -177,6 +186,7 @@ def format_signal_card_markdown(signal: dict, audit_tx_hash: Optional[str] = Non
 
 def format_signal_card_plain(signal: dict, audit_tx_hash: Optional[str] = None) -> str:
     """Format a signal dict as plain text — for LINE Messaging API."""
+    signal_id    = signal.get("id")
     signal_type  = signal.get("signal_type", "unusual_volume")
     chain        = signal.get("chain", "mantle")
     protocol     = signal.get("protocol", "unknown")
@@ -218,10 +228,13 @@ def format_signal_card_plain(signal: dict, audit_tx_hash: Optional[str] = None) 
         lines.append("")
 
     if audit_tx_hash:
-        audit_url = f"https://explorer.mantle.xyz/tx/{audit_tx_hash}"
+        audit_url = f"{explorer_base}/tx/{audit_tx_hash}"
         lines.append(f"On-chain proof — verify signal: {audit_url}")
     else:
         lines.append(f"Pool: {pool_short}  {explorer_url}")
+
+    if signal_id is not None:
+        lines.append(f'Signal #{signal_id} — verify anytime with "verify {signal_id}"')
 
     lines.append("")
     lines.append("Not financial advice. DYOR.")
@@ -257,7 +270,9 @@ def format_history_card(signals: list) -> str:
         vol      = format_usd(float(s.get("total_volume_usd", 0)))
         emoji    = SIGNAL_EMOJIS.get(s.get("signal_type", ""), "🔍")
         chain    = s.get("chain", "mantle").capitalize()
-        lines.append(f"{i}. {emoji} <b>{sig_type}</b> · {proto} · {chain} · {vol} · {conf}% conf")
+        sig_id   = s.get("id")
+        id_part  = f" · <code>#{sig_id}</code>" if sig_id is not None else ""
+        lines.append(f"{i}. {emoji} <b>{sig_type}</b> · {proto} · {chain} · {vol} · {conf}% conf{id_part}")
 
     return "\n".join(lines)
 
@@ -289,6 +304,8 @@ def format_history_card_plain(signals: list) -> str:
         vol      = format_usd(float(s.get("total_volume_usd", 0)))
         emoji    = SIGNAL_EMOJIS.get(s.get("signal_type", ""), "🔍")
         chain    = s.get("chain", "mantle").capitalize()
-        lines.append(f"{i}. {emoji} {sig_type} · {proto} · {chain} · {vol} · {conf}% conf")
+        sig_id   = s.get("id")
+        id_part  = f" · #{sig_id}" if sig_id is not None else ""
+        lines.append(f"{i}. {emoji} {sig_type} · {proto} · {chain} · {vol} · {conf}% conf{id_part}")
 
     return "\n".join(lines)
