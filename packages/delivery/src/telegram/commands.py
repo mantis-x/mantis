@@ -22,7 +22,7 @@ from src.formatters.signal_card import (
     format_history_card,
 )
 from src.telegram.subscription_manager import SubscriptionManager
-from src.common.live_stats import get_live_candidates
+from src.common.live_stats import get_live_candidates, get_enrichment_consecutive_errors
 from src.audit.on_chain_logger import get_explorer_contract_url
 
 log = logging.getLogger(__name__)
@@ -136,6 +136,9 @@ def register_handlers(app, sub_manager: SubscriptionManager, stats: dict, redis_
         live_candidates = await get_live_candidates(redis_url)
         if live_candidates is not None:
             stats["candidates"] = live_candidates
+        enrichment_errors = await get_enrichment_consecutive_errors(redis_url)
+        if enrichment_errors is not None:
+            stats["enrichment_errors"] = enrichment_errors
         await update.message.reply_html(format_status_card(stats))
 
     async def history(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:

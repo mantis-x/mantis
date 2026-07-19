@@ -246,9 +246,15 @@ def format_signal_card_plain(signal: dict, audit_tx_hash: Optional[str] = None) 
 
 def format_status_card(stats: dict) -> str:
     """Format a /status response."""
+    degraded = stats.get("enrichment_errors") or 0
+    warning  = (
+        f"⚠️ <b>Enrichment degraded</b> — {degraded} consecutive Claude API failures\n\n"
+        if degraded >= 3 else ""
+    )
     return (
         "🦟 <b>Mantis Scout — Status</b>\n"
         "\n"
+        f"{warning}"
         f"🟢 <b>Live</b> — {stats.get('chains_label', 'Mantle')}\n"
         f"📦 Pools tracked: <b>{stats.get('pools', 11)}</b>\n"
         f"⚡ Signals today: <b>{stats.get('signals_today', 0)}</b>\n"
@@ -280,9 +286,15 @@ def format_history_card(signals: list) -> str:
 
 def format_status_card_plain(stats: dict) -> str:
     """Plain-text /status response — for LINE / Discord."""
+    degraded = stats.get("enrichment_errors") or 0
+    warning  = (
+        f"Enrichment degraded — {degraded} consecutive Claude API failures\n\n"
+        if degraded >= 3 else ""
+    )
     return (
         "Mantis Scout — Status\n"
         "\n"
+        f"{warning}"
         f"Live — {stats.get('chains_label', 'Mantle')}\n"
         f"Pools tracked: {stats.get('pools', 11)}\n"
         f"Signals today: {stats.get('signals_today', 0)}\n"

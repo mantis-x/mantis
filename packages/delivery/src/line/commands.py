@@ -23,7 +23,7 @@ from src.formatters.signal_card import (
     format_history_card_plain,
 )
 from src.common.subscription_manager import SubscriptionManager
-from src.common.live_stats import get_live_candidates
+from src.common.live_stats import get_live_candidates, get_enrichment_consecutive_errors
 from src.audit.on_chain_logger import get_explorer_contract_url
 
 log = logging.getLogger(__name__)
@@ -120,6 +120,9 @@ async def handle_text(text: str, user_id: str, sub_manager: SubscriptionManager,
         live_candidates = await get_live_candidates(redis_url)
         if live_candidates is not None:
             stats["candidates"] = live_candidates
+        enrichment_errors = await get_enrichment_consecutive_errors(redis_url)
+        if enrichment_errors is not None:
+            stats["enrichment_errors"] = enrichment_errors
         return format_status_card_plain(stats)
 
     if command == "history":

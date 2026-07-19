@@ -43,6 +43,7 @@ logging.basicConfig(
 log = logging.getLogger("mantis.enrichment")
 
 from src.enricher import Enricher
+from src.alerting import EnrichmentAlerter
 
 
 async def main() -> None:
@@ -62,6 +63,7 @@ async def main() -> None:
 
     import redis.asyncio as aioredis
     r = aioredis.from_url(redis_url, decode_responses=True)
+    alerter = EnrichmentAlerter()
 
     log.info("Listening on Redis mantis:anomaly_candidates ...")
 
@@ -82,7 +84,12 @@ async def main() -> None:
                 float(candidate.get("total_volume_usd", 0)),
             )
 
+            errors_before = enricher.stats["errors"]
             signal = enricher.enrich(candidate)
+            # A real Claude-call/parse failure increments enricher.stats["errors"];
+            # a legitimate low-confidence discard does not — only alert on the
+            # former, see alerting.py's docstring for why this distinction matters.
+            await alerter.record(r, is_error=enricher.stats["errors"] > errors_before)
 
             if signal:
                 signal_payload = json.dumps(signal.to_dict())
