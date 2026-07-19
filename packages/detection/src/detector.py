@@ -37,6 +37,12 @@ from src.algorithms.clustering import WalletClusterer, CLUSTER_WINDOW_MINUTES
 from src.baselines.pool_baseline import BaselineStore
 from src.models.candidate import AnomalyCandidate, WalletCluster, ScoredEvent
 
+# Cooldown before the same (wallet, pool, event_type) can fire a second solo
+# candidate — found 2026-07-19: the same wallet's repeat activity on one pool
+# (e.g. baseline recalculating between two mints seconds apart) was producing
+# near-duplicate alerts with no suppression at all.
+SOLO_COOLDOWN_MINUTES = int(os.getenv("SOLO_SIGNAL_COOLDOWN_MINUTES", "30"))
+
 # ── Bootstrap with synthetic historical data so detector scores immediately ──
 # In production this comes from Postgres. For Week 2 we seed with realistic
 # Mantle pool volume estimates so z-scores work from the first real event.
@@ -148,6 +154,39 @@ class Detector:
         # wallet joining) to be emitted as its own candidate.
         self._emitted_signatures: dict[tuple, dict[frozenset, datetime]] = defaultdict(dict)
 
+        # Solo-signal dedup — found 2026-07-19: the solo emission path had no
+        # cooldown at all, so the same wallet repeating the same action on the
+        # same pool (e.g. a baseline recalculating between two mints seconds
+        # apart) produced near-duplicate alerts with different z-scores/
+        # confidence for what a subscriber reads as the same event. Distinct
+        # from the multi-wallet dedup above — this tracks one wallet's own
+        # repeat activity, not overlapping wallet groups.
+        self._solo_last_emitted: dict[tuple, datetime] = {}
+
+    def _should_emit_solo(self, scored: ScoredEvent) -> bool:
+        """False if this (wallet, pool, event_type) already fired a solo
+        candidate within SOLO_SIGNAL_COOLDOWN_MINUTES."""
+        key  = (scored.wallet_address, scored.pool_address, scored.event_type)
+        last = self._solo_last_emitted.get(key)
+        if last is not None and scored.timestamp - last < timedelta(minutes=SOLO_COOLDOWN_MINUTES):
+            log.debug(
+                "Solo signal suppressed (cooldown): wallet=%s pool=%s type=%s",
+                scored.wallet_address, scored.pool_address, scored.event_type,
+            )
+            return False
+        self._solo_last_emitted[key] = scored.timestamp
+        return True
+
+    def _prune_solo_emitted(self, now: datetime) -> None:
+        """Unlike the pool-keyed dicts above (bounded by pool_registry size),
+        this is keyed by wallet address too, so the key space grows with
+        every distinct wallet ever seen — must be pruned or it leaks memory
+        over a long-running process."""
+        cutoff = now - timedelta(minutes=SOLO_COOLDOWN_MINUTES)
+        stale  = [k for k, ts in self._solo_last_emitted.items() if ts < cutoff]
+        for k in stale:
+            del self._solo_last_emitted[k]
+
     async def run(self) -> None:
         log.info("=" * 50)
         log.info("  Mantis Scout — Detection Engine")
@@ -194,17 +233,21 @@ class Detector:
         if scored is None:
             return
 
-        # Existing behavior, unchanged: every event that clears the z-score
-        # threshold is always emitted as (at minimum) a solo-wallet candidate.
-        await self._emit_candidate(self._clusterer._solo_cluster(scored), [scored], r)
+        # Every event that clears the z-score threshold is emitted as (at
+        # minimum) a solo-wallet candidate — unless this same wallet already
+        # fired one for this pool/event_type within SOLO_COOLDOWN_MINUTES
+        # (see _should_emit_solo's docstring for why this dedup exists).
+        if self._should_emit_solo(scored):
+            await self._emit_candidate(self._clusterer._solo_cluster(scored), [scored], r)
 
-        # New: additionally check if this event, combined with other recently
+        # Additionally check if this event, combined with other recently
         # flagged events on the same pool, now forms a real multi-wallet
         # cluster — see the constructor comment for why this is additive.
         await self._check_multi_wallet_cluster(scored, r)
 
-        # Log stats every 100 events
+        # Every 100 events: prune the solo-dedup dict and log stats
         if self._processed % 100 == 0:
+            self._prune_solo_emitted(scored.timestamp)
             log.info("Stats: %s", self._scorer.stats)
 
     async def _check_multi_wallet_cluster(self, scored: ScoredEvent, r) -> None:
