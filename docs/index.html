@@ -852,7 +852,7 @@
         <span class="product-tag">Scout · Intelligence Layer</span>
         <h3>Mantis Scout</h3>
         <p class="product-desc">
-          The intelligence layer. Monitors Agni Finance, Merchant Moe, and Fluxion on Mantle — Uniswap V3 and Trader Joe on Arbitrum — plus token transfer-flow monitoring on HashKey Chain — around the clock. Detects smart money wallet clusters using z-score anomaly detection, enriches each signal through Claude Sonnet, and delivers plain-English alerts with confidence scores to Telegram. Every signal is hashed and recorded immutably on-chain via <code style="font-family:var(--mono);font-size:0.8em;color:var(--green)">SignalAuditLog.sol</code>.
+          The intelligence layer. Monitors Agni Finance and Merchant Moe on Mantle — Uniswap V3 and Trader Joe on Arbitrum — Uniswap V3 blue-chip pools on Ethereum — plus token transfer-flow monitoring on HashKey Chain — around the clock. Detects smart money wallet clusters using z-score anomaly detection, enriches each signal through Claude Sonnet, and delivers plain-English alerts with confidence scores to Telegram. Every signal is hashed and recorded immutably on-chain via <code style="font-family:var(--mono);font-size:0.8em;color:var(--green)">SignalAuditLog.sol</code>.
         </p>
         <ul class="product-specs">
           <li>Z-score anomaly detection across wallet clusters</li>
@@ -896,7 +896,7 @@
       <div class="pipe-step">
         <div class="pipe-num">01</div>
         <div class="pipe-name">Ingest</div>
-        <div class="pipe-detail">Mantle + Arbitrum + HashKey + Ethereum RPC polling. Decoders for Agni, Merchant Moe, Fluxion, Uniswap V3, Trader Joe, and HashKey ERC-20 transfer flow.</div>
+        <div class="pipe-detail">Mantle + Arbitrum + HashKey + Ethereum RPC polling. Decoders for Agni, Merchant Moe, Uniswap V3, Trader Joe, and HashKey ERC-20 transfer flow.</div>
         <div class="pipe-pkg">ingestion/</div>
       </div>
       <div class="pipe-step">
@@ -1250,7 +1250,7 @@
   const signals = [
     { time: 'just now', signal: 'Smart money cluster → mETH/USDT pool',       protocol: 'Agni · Mantle',        conf: 91, cls: 'conf-high' },
     { time: '2m ago',   signal: 'Whale accumulation · WETH/USDC 0.05%',        protocol: 'Uniswap V3 · Arbitrum', conf: 88, cls: 'conf-high' },
-    { time: '5m ago',   signal: 'Anomalous LP entry · z-score 3.2σ',           protocol: 'Fluxion · Mantle',      conf: 85, cls: 'conf-high' },
+    { time: '5m ago',   signal: 'Anomalous LP entry · z-score 3.2σ',           protocol: 'Merchant Moe · Mantle', conf: 85, cls: 'conf-high' },
     { time: '8m ago',   signal: 'Whale entry · $2.4M WBTC/WETH swap',          protocol: 'Uniswap V3 · Arbitrum', conf: 79, cls: 'conf-mid' },
     { time: '12m ago',  signal: 'Smart money exit · mETH rotation',            protocol: 'Agni · Mantle',        conf: 67, cls: 'conf-mid' },
     { time: '16m ago',  signal: 'Cluster divergence · 5-wallet group',         protocol: 'Merchant Moe · Mantle', conf: 55, cls: 'conf-low' },
@@ -1258,7 +1258,7 @@
     { time: '26m ago',  signal: 'Smart money cluster · new position opened',   protocol: 'Agni · Mantle',        conf: 82, cls: 'conf-high' },
     { time: '31m ago',  signal: 'Anomalous volume · ARB/WETH pool · 3.8σ',     protocol: 'Uniswap V3 · Arbitrum', conf: 76, cls: 'conf-mid' },
     { time: '35m ago',  signal: 'Large USDT transfer-flow spike detected',     protocol: 'HashKey Chain',         conf: 71, cls: 'conf-mid' },
-    { time: '38m ago',  signal: 'Anomaly cleared · signal aborted',            protocol: 'Fluxion · Mantle',      conf: 38, cls: 'conf-low' },
+    { time: '38m ago',  signal: 'Anomaly cleared · signal aborted',            protocol: 'Agni · Mantle',         conf: 38, cls: 'conf-low' },
   ];
 
   function renderTicker() {

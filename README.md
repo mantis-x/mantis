@@ -9,7 +9,7 @@ Signal-to-execution AI running on **Mantle**, **Arbitrum**, **HashKey Chain**, a
 ## What Mantis is
 
 **Mantis Scout** is the intelligence layer. Monitors Mantle DeFi protocols
-(Agni Finance, Merchant Moe, Fluxion), Arbitrum protocols (Uniswap V3,
+(Agni Finance, Merchant Moe), Arbitrum protocols (Uniswap V3,
 Trader Joe, GMX V1 perps), HashKey Chain ERC-20 transfer flows, and Ethereum
 mainnet blue-chip Uniswap V3 pools (WETH/USDC, WETH/USDT, WBTC/WETH) around
 the clock. Detects smart money wallet clusters using z-score anomaly
@@ -132,7 +132,7 @@ Deploy: `npx hardhat run scripts/deploy_audit_log.js --network arbitrum` (swap `
 
 | Chain | Status | Protocols | Execution |
 |---|---|---|---|
-| Mantle | Live | Agni Finance (verified real pools; Merchant Moe, Fluxion unverified) | Scout + Execute (audit/identity contracts live on mainnet; Execute itself still `BYREAL_DRY_RUN=true`, simulated) |
+| Mantle | Live | Agni Finance (3 pools) + Merchant Moe (1 pool), all verified real via `eth_getLogs`; Fluxion removed 2026-07-19 — old address was fake, no real replacement found yet | Scout + Execute (audit/identity contracts live on mainnet; Execute itself still `BYREAL_DRY_RUN=true`, simulated) |
 | Arbitrum | Live | Uniswap V3, Trader Joe, GMX V1 perps | Scout + Execute (audit/identity contracts live on mainnet, requires `ARBITRUM_*` address overrides — see Contracts) |
 | HashKey Chain | Live | ERC-20 transfer flow monitoring (no DEX with real volume found) | Scout only — flow-monitoring signals don't drive trade execution |
 | Ethereum | Live (2026-07-18) | Uniswap V3 blue-chip pools — USDC/WETH, WETH/USDT, WBTC/WETH, all 0.05% tier (verified real via `eth_getLogs`, not assumed) | Scout only — no swap executor built; `executor.py._do_swap`/`_wallet_balance_usd` explicitly raise rather than silently falling through to the Mantle path. Audit/identity contracts live on mainnet, requires `ETHEREUM_*` address overrides — see Contracts |

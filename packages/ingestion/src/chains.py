@@ -121,17 +121,40 @@ MANTLE = ChainConfig(
         "0xd08c50f7e69e9aeb2867deff4a8053d9a855e26a": PoolMeta(
             "agni_finance", token0=_MANTLE_USDT, token1=_MANTLE_WMNT,
         ),  # WMNT/USDT 0.05% -- quietest of the three, ~1 swap/hr
-        # Merchant Moe (Liquidity Book) and Fluxion addresses below are
-        # UNVERIFIED -- not checked as part of the 2026-07-16 Agni fix.
-        # Given the Agni entries turned out to be entirely wrong, treat
-        # these with the same suspicion until someone verifies them the
-        # same way (real Swap/LB-swap topic hits via eth_getLogs).
-        "0x013e138ef6008ae3b5a8c21e6ef571d89b0b57d8": PoolMeta("merchant_moe"),  # LB Router
-        "0x32a42b22a5337a7e0ab90f6f1f7bec37ae48f51f": PoolMeta("merchant_moe"),  # LB Factory
-        "0x8e4bcaabb5df13c2c6d8fd44c7e0a5fc9c41e14d": PoolMeta("merchant_moe"),
-        "0x44d79d90bd4b1a9003c1e3f30b73c4bef1a2b7b0": PoolMeta("merchant_moe"),
-        # Fluxion
-        "0x4bdf0d23f5c1b7e7e1e1b8e5e8f4a1b2d3e4c5a6": PoolMeta("fluxion"),
+        # Merchant Moe (Trader Joe Liquidity Book fork) -- verified 2026-07-19.
+        # The previous 4 addresses here were pure fakes: eth_getCode returned
+        # "0x" (no contract at all, not even the wrong kind) for every one of
+        # them, including two labeled "LB Router"/"LB Factory" -- structurally
+        # wrong anyway, since a router/factory can't emit pool-level Swap
+        # events, same mistake as the original Agni entries. Real addresses
+        # (LBFactory 0xa6630671775c4EA2743840F9A5016dCf2A104054, LBRouter
+        # 0x013e138EF6008ae5FDFDE29700e3f2Bc61d21E3a) found via Merchant Moe's
+        # own docs (docs.merchantmoe.com/resources/contracts) -- note the fake
+        # router address shared a prefix with this real one before diverging,
+        # suggesting a corrupted copy rather than a pure invention. Queried
+        # LBFactory.getAllLBPairs() for WMNT/USDC, WMNT/WETH, WMNT/USDT across
+        # every bin-step tier (16 candidate pairs total), then checked each
+        # for real Swap-topic activity via eth_getLogs (20,000-block sample,
+        # ~11h) -- only ONE had any: WMNT/WETH at 10bp, 50 real swaps. The
+        # other 15 candidate pairs had zero activity and are not included.
+        #
+        # NOTE: _decode_lb_swap() in event_normaliser.py currently hardcodes
+        # amount_usd=0.0 for every LB swap -- it never actually decodes the
+        # packed amountsIn/amountsOut bytes32 fields the way the Uniswap V3
+        # decoder does for amount0/amount1. This pool will ingest as real
+        # $0 swaps until that decoder gap is closed separately; flagged in
+        # PROJECT_STATE.md rather than rushed here, since LB's bin-based
+        # accounting needs its own careful implementation.
+        "0x1606c79be3ebd70d8d40bac6287e23005cfbefa2": PoolMeta(
+            "merchant_moe", token0=_MANTLE_WMNT, token1=_MANTLE_WETH,
+        ),  # WMNT/WETH 10bp -- 50 real swaps/20000 blocks, tokenX/tokenY confirmed via getTokenX()/getTokenY()
+        # Fluxion -- removed 2026-07-19. The previous address had no contract
+        # code deployed at all (same as the Merchant Moe fakes above). Fluxion
+        # is a real, live protocol on Mantle (launched Dec 2025, V2/V3 AMM +
+        # orderbook) but finding its real factory/pools AND writing a decoder
+        # for its event format (event_normaliser.py has zero Fluxion-specific
+        # decoding today) is a bigger lift than a pool-address swap -- left
+        # out entirely rather than guess. See PROJECT_STATE.md Next Priorities.
     },
     token_prices={
         "mnt":  0.72,

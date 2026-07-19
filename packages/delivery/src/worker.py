@@ -57,7 +57,7 @@ _CHAIN_DISPLAY = {
     "ethereum": "Ethereum",
 }
 _CHAIN_POOL_COUNTS = {
-    "mantle":   11,
+    "mantle":   4,   # 3 Agni + 1 Merchant Moe -- was hardcoded to 11, never matched the real pool_registry size (see chains.py, verified 2026-07-19)
     "arbitrum": 9,
     "hashkey":  3,
     "ethereum": 3,

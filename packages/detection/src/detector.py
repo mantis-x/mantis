@@ -16,7 +16,8 @@ import json
 import logging
 import os
 import time
-from datetime import datetime, timezone
+from collections import defaultdict
+from datetime import datetime, timedelta, timezone
 
 from dotenv import load_dotenv
 
@@ -32,9 +33,9 @@ logging.basicConfig(
 log = logging.getLogger("mantis.detection")
 
 from src.algorithms.zscore    import ZScoreDetector
-from src.algorithms.clustering import WalletClusterer
+from src.algorithms.clustering import WalletClusterer, CLUSTER_WINDOW_MINUTES
 from src.baselines.pool_baseline import BaselineStore
-from src.models.candidate import AnomalyCandidate
+from src.models.candidate import AnomalyCandidate, WalletCluster, ScoredEvent
 
 # ── Bootstrap with synthetic historical data so detector scores immediately ──
 # In production this comes from Postgres. For Week 2 we seed with realistic
@@ -128,6 +129,25 @@ class Detector:
         self._processed  = 0
         self._candidates = 0
 
+        # Real multi-wallet clustering support — previously WalletClusterer.cluster()
+        # existed and worked but was never wired into the live streaming path (see
+        # PROJECT_STATE.md Known Bugs: "No real multi-wallet clustering"). _process()
+        # only ever called _solo_cluster() on one event at a time, so every candidate
+        # was a single-wallet cluster and enrichment's own calibration table capped
+        # confidence at 55-69 regardless of z-score/volume. Fixed by keeping a short
+        # rolling buffer of recently-flagged events per (pool, event_type) and running
+        # the real cluster() over it on every new event, in *addition* to the existing
+        # solo emission (not instead of it) — purely additive, so it cannot reduce
+        # today's candidate volume, only add genuinely-coordinated multi-wallet
+        # candidates on top.
+        self._recent_events: dict[tuple, list[ScoredEvent]] = defaultdict(list)
+        # Wallet-set signatures already emitted per (pool, event_type), with the
+        # timestamp of the event that triggered emission — prevents re-emitting the
+        # exact same wallet group as a "new" candidate on every subsequent event
+        # within the window, while still allowing a genuinely larger cluster (a new
+        # wallet joining) to be emitted as its own candidate.
+        self._emitted_signatures: dict[tuple, dict[frozenset, datetime]] = defaultdict(dict)
+
     async def run(self) -> None:
         log.info("=" * 50)
         log.info("  Mantis Scout — Detection Engine")
@@ -174,11 +194,55 @@ class Detector:
         if scored is None:
             return
 
-        cluster = self._clusterer._solo_cluster(scored)
-        candidate = AnomalyCandidate(
-            cluster    = cluster,
-            raw_events = [scored],
-        )
+        # Existing behavior, unchanged: every event that clears the z-score
+        # threshold is always emitted as (at minimum) a solo-wallet candidate.
+        await self._emit_candidate(self._clusterer._solo_cluster(scored), [scored], r)
+
+        # New: additionally check if this event, combined with other recently
+        # flagged events on the same pool, now forms a real multi-wallet
+        # cluster — see the constructor comment for why this is additive.
+        await self._check_multi_wallet_cluster(scored, r)
+
+        # Log stats every 100 events
+        if self._processed % 100 == 0:
+            log.info("Stats: %s", self._scorer.stats)
+
+    async def _check_multi_wallet_cluster(self, scored: ScoredEvent, r) -> None:
+        """Buffer recent same-(pool,event_type) events and emit any newly-formed
+        multi-wallet cluster the just-arrived event completes."""
+        key    = (scored.pool_address, scored.event_type)
+        window = timedelta(minutes=CLUSTER_WINDOW_MINUTES)
+        cutoff = scored.timestamp - window
+
+        buf = self._recent_events[key]
+        buf.append(scored)
+        buf[:] = [e for e in buf if e.timestamp >= cutoff]
+
+        sigs = self._emitted_signatures[key]
+        for sig, ts in list(sigs.items()):
+            if ts < cutoff:
+                del sigs[sig]
+
+        for cluster in self._clusterer.cluster(buf):
+            if cluster.wallet_count < 2:
+                continue  # solo case already handled unconditionally in _process
+            if scored.wallet_address not in cluster.wallets:
+                continue
+
+            signature = frozenset(cluster.wallets)
+            if signature in sigs:
+                continue  # this exact wallet group was already emitted
+
+            sigs[signature] = scored.timestamp
+            raw_events = [e for e in buf if e.wallet_address in cluster.wallets]
+            await self._emit_candidate(cluster, raw_events, r)
+            log.info(
+                "🐋🐋 Multi-wallet cluster: %d wallets, z=%.2f, usd=%.0f",
+                cluster.wallet_count, cluster.z_score, cluster.total_volume_usd,
+            )
+
+    async def _emit_candidate(self, cluster: WalletCluster, raw_events: list[ScoredEvent], r) -> None:
+        candidate = AnomalyCandidate(cluster=cluster, raw_events=raw_events)
 
         payload = json.dumps(candidate.to_dict())
         await r.lpush("mantis:anomaly_candidates", payload)
@@ -187,13 +251,10 @@ class Detector:
         self._candidates += 1
         await r.set("mantis:stats:candidates", self._candidates)
         log.info(
-            "🎯 Candidate queued: z=%.2f protocol=%s type=%s usd=%.0f",
-            scored.z_score, scored.protocol, scored.event_type, scored.amount_usd,
+            "🎯 Candidate queued: z=%.2f protocol=%s type=%s usd=%.0f wallets=%d",
+            cluster.z_score, cluster.protocol, cluster.event_type,
+            cluster.total_volume_usd, cluster.wallet_count,
         )
-
-        # Log stats every 100 events
-        if self._processed % 100 == 0:
-            log.info("Stats: %s", self._scorer.stats)
 
 
 class _DictEvent:
