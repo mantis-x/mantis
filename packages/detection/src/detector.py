@@ -42,6 +42,23 @@ from src.models.candidate import AnomalyCandidate, WalletCluster, ScoredEvent
 # window prune already bounds this by time; this is a hard safety ceiling.
 _MAX_BUFFER_PER_KEY = int(os.getenv("CLUSTER_BUFFER_MAX", "500"))
 
+# Multi-wallet coordinated accumulation is a DEX phenomenon (swap/mint/burn).
+# HashKey's token-transfer flow monitoring produces many tiny same-window
+# transfers from distinct wallets that clear the aggregate z-score against its
+# very small baseline but are NOT coordinated whale activity (observed live
+# 2026-07-21: dozens of $28-$93 "clusters"). Exclude those event types from the
+# multi-wallet path — the solo flow-monitoring path still covers HashKey.
+_MULTIWALLET_EXCLUDE_TYPES = set(
+    t.strip() for t in os.getenv("MULTIWALLET_EXCLUDE_TYPES", "transfer").split(",") if t.strip()
+)
+# Floor on a multi-wallet cluster's aggregate USD. Set to $100k (2026-07-21,
+# user decision) to target genuine whale-scale coordination only — the real
+# whale signals this project has produced were all $200k-$3.2M, while the live
+# over-firing noise was sub-$100. This deliberately excludes retail-scale
+# coordination on low-baseline chains (Mantle/HashKey); tune via env without a
+# redeploy if that ever needs revisiting.
+_MULTIWALLET_MIN_USD = float(os.getenv("MULTIWALLET_MIN_USD", "100000"))
+
 # Cooldown before the same (wallet, pool, event_type) can fire a second solo
 # candidate — found 2026-07-19: the same wallet's repeat activity on one pool
 # (e.g. baseline recalculating between two mints seconds apart) was producing
@@ -269,6 +286,12 @@ class Detector:
         """Buffer recent same-(pool,event_type) events (anomalous or not) and emit
         a multi-wallet candidate when >=2 distinct wallets' *combined* window
         volume is itself anomalous against the pool baseline."""
+        # Coordinated-accumulation clustering is a DEX concept — skip flow-
+        # monitoring transfer events (HashKey), which otherwise fire on tiny
+        # transfer bursts against a small baseline. Solo path still covers them.
+        if scored.event_type in _MULTIWALLET_EXCLUDE_TYPES:
+            return
+
         key    = (scored.pool_address, scored.event_type)
         window = timedelta(minutes=CLUSTER_WINDOW_MINUTES)
         cutoff = scored.timestamp - window
@@ -295,6 +318,9 @@ class Detector:
         # on normal activity, only when a short-window multi-wallet burst already
         # exceeds a typical *hour* of volume by the threshold.
         aggregate_usd = sum(e.amount_usd for e in buf)
+        if aggregate_usd < _MULTIWALLET_MIN_USD:
+            return   # not economically meaningful — don't spend an enrichment call
+
         z_agg = self._store.z_score(
             scored.pool_address, scored.event_type, aggregate_usd, chain=scored.chain,
         )
