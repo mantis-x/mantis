@@ -33,9 +33,14 @@ logging.basicConfig(
 log = logging.getLogger("mantis.detection")
 
 from src.algorithms.zscore    import ZScoreDetector
-from src.algorithms.clustering import WalletClusterer, CLUSTER_WINDOW_MINUTES
+from src.algorithms.clustering import WalletClusterer, CLUSTER_WINDOW_MINUTES, MIN_CLUSTER_SIZE
 from src.baselines.pool_baseline import BaselineStore
 from src.models.candidate import AnomalyCandidate, WalletCluster, ScoredEvent
+
+# Cap on buffered events per (pool, event_type) window — bounds memory on busy
+# pools (an active Uniswap pool can log hundreds of events in 30 min). The
+# window prune already bounds this by time; this is a hard safety ceiling.
+_MAX_BUFFER_PER_KEY = int(os.getenv("CLUSTER_BUFFER_MAX", "500"))
 
 # Cooldown before the same (wallet, pool, event_type) can fire a second solo
 # candidate — found 2026-07-19: the same wallet's repeat activity on one pool
@@ -135,17 +140,24 @@ class Detector:
         self._processed  = 0
         self._candidates = 0
 
-        # Real multi-wallet clustering support — previously WalletClusterer.cluster()
-        # existed and worked but was never wired into the live streaming path (see
-        # PROJECT_STATE.md Known Bugs: "No real multi-wallet clustering"). _process()
-        # only ever called _solo_cluster() on one event at a time, so every candidate
-        # was a single-wallet cluster and enrichment's own calibration table capped
-        # confidence at 55-69 regardless of z-score/volume. Fixed by keeping a short
-        # rolling buffer of recently-flagged events per (pool, event_type) and running
-        # the real cluster() over it on every new event, in *addition* to the existing
-        # solo emission (not instead of it) — purely additive, so it cannot reduce
-        # today's candidate volume, only add genuinely-coordinated multi-wallet
-        # candidates on top.
+        # Real multi-wallet clustering — 2026-07-21 rewrite. The first attempt
+        # (2026-07-19) buffered only events that had *already* cleared the z-score
+        # gate, then required >=2 such whales on the same pool/type within the
+        # window. Production proved that precondition statistically unreachable:
+        # ~19 threshold-crossing events in a week across 11 (pool,type) buckets,
+        # the single closest pair 69 min apart (2.3x the 30-min window) — zero
+        # multi-wallet clusters ever emitted. The deeper flaw: real coordinated
+        # accumulation is many wallets each doing *individually-modest* trades that
+        # are only anomalous in aggregate, but filtering each event through z-score
+        # first drops exactly those before clustering can see them.
+        #
+        # New approach: buffer ALL scorable events per (pool, event_type) —
+        # not just anomalies (see ZScoreDetector.evaluate) — and on each new event
+        # compute an *aggregate* z-score over the combined volume of the >=2
+        # distinct wallets active in the window, against the same hourly pool
+        # baseline the solo path uses. A window whose combined multi-wallet volume
+        # is itself anomalous is coordination no single event would have surfaced.
+        # This is still additive to the solo path, which is unchanged.
         self._recent_events: dict[tuple, list[ScoredEvent]] = defaultdict(list)
         # Wallet-set signatures already emitted per (pool, event_type), with the
         # timestamp of the event that triggered emission — prevents re-emitting the
@@ -228,21 +240,24 @@ class Detector:
 
         # Reconstruct a minimal event object from the dict
         event = _DictEvent(event_dict)
-        scored = self._scorer.score_event(event)
+        # evaluate() records the baseline and returns the event with its z-score
+        # even when it's below threshold — the multi-wallet path needs those.
+        scored = self._scorer.evaluate(event)
 
         if scored is None:
-            return
+            return   # baseline not ready yet
 
         # Every event that clears the z-score threshold is emitted as (at
         # minimum) a solo-wallet candidate — unless this same wallet already
         # fired one for this pool/event_type within SOLO_COOLDOWN_MINUTES
         # (see _should_emit_solo's docstring for why this dedup exists).
-        if self._should_emit_solo(scored):
+        if scored.is_anomaly and self._should_emit_solo(scored):
             await self._emit_candidate(self._clusterer._solo_cluster(scored), [scored], r)
 
-        # Additionally check if this event, combined with other recently
-        # flagged events on the same pool, now forms a real multi-wallet
-        # cluster — see the constructor comment for why this is additive.
+        # Additionally check if this event, combined with other recent events on
+        # the same pool (anomalous or not), now forms a coordinated multi-wallet
+        # cluster whose *aggregate* volume is anomalous — see the constructor
+        # comment for why this is additive and why it buffers sub-threshold events.
         await self._check_multi_wallet_cluster(scored, r)
 
         # Every 100 events: prune the solo-dedup dict and log stats
@@ -251,8 +266,9 @@ class Detector:
             log.info("Stats: %s", self._scorer.stats)
 
     async def _check_multi_wallet_cluster(self, scored: ScoredEvent, r) -> None:
-        """Buffer recent same-(pool,event_type) events and emit any newly-formed
-        multi-wallet cluster the just-arrived event completes."""
+        """Buffer recent same-(pool,event_type) events (anomalous or not) and emit
+        a multi-wallet candidate when >=2 distinct wallets' *combined* window
+        volume is itself anomalous against the pool baseline."""
         key    = (scored.pool_address, scored.event_type)
         window = timedelta(minutes=CLUSTER_WINDOW_MINUTES)
         cutoff = scored.timestamp - window
@@ -260,29 +276,57 @@ class Detector:
         buf = self._recent_events[key]
         buf.append(scored)
         buf[:] = [e for e in buf if e.timestamp >= cutoff]
+        if len(buf) > _MAX_BUFFER_PER_KEY:
+            del buf[:-_MAX_BUFFER_PER_KEY]
 
         sigs = self._emitted_signatures[key]
         for sig, ts in list(sigs.items()):
             if ts < cutoff:
                 del sigs[sig]
 
-        for cluster in self._clusterer.cluster(buf):
-            if cluster.wallet_count < 2:
-                continue  # solo case already handled unconditionally in _process
-            if scored.wallet_address not in cluster.wallets:
-                continue
+        wallets = sorted({e.wallet_address for e in buf})
+        if len(wallets) < MIN_CLUSTER_SIZE:
+            return   # not multi-wallet yet — solo path already handled anomalies
 
-            signature = frozenset(cluster.wallets)
-            if signature in sigs:
-                continue  # this exact wallet group was already emitted
+        # Aggregate the combined volume of the coordinated window and z-score it
+        # against the same (pool, event_type) hourly baseline the solo path uses.
+        # A 30-min window is <= one baseline bucket, so this is a conservative
+        # comparison (partial-hour sum vs full-hour distribution) — it won't fire
+        # on normal activity, only when a short-window multi-wallet burst already
+        # exceeds a typical *hour* of volume by the threshold.
+        aggregate_usd = sum(e.amount_usd for e in buf)
+        z_agg = self._store.z_score(
+            scored.pool_address, scored.event_type, aggregate_usd, chain=scored.chain,
+        )
+        if z_agg is None or z_agg < self._scorer.threshold_for(scored.chain):
+            return
 
-            sigs[signature] = scored.timestamp
-            raw_events = [e for e in buf if e.wallet_address in cluster.wallets]
-            await self._emit_candidate(cluster, raw_events, r)
-            log.info(
-                "🐋🐋 Multi-wallet cluster: %d wallets, z=%.2f, usd=%.0f",
-                cluster.wallet_count, cluster.z_score, cluster.total_volume_usd,
-            )
+        # Dedup by exact wallet set — a genuinely new wallet joining yields a
+        # larger set (new signature) and re-emits; the same group repeating does
+        # not. Suppressed groups still stay in the buffer, so a later join still
+        # forms the larger cluster.
+        signature = frozenset(wallets)
+        if signature in sigs:
+            return
+        sigs[signature] = scored.timestamp
+
+        cluster = WalletCluster(
+            wallets          = list(wallets),
+            chain            = scored.chain,
+            pool_address     = scored.pool_address,
+            protocol         = scored.protocol,
+            event_type       = scored.event_type,
+            total_volume_usd = aggregate_usd,
+            z_score          = round(z_agg, 3),
+            event_count      = len(buf),
+            first_seen       = min(e.timestamp for e in buf),
+            last_seen        = max(e.timestamp for e in buf),
+        )
+        await self._emit_candidate(cluster, list(buf), r)
+        log.info(
+            "🐋🐋 Multi-wallet cluster: %d wallets, aggregate z=%.2f, usd=%.0f",
+            len(wallets), z_agg, aggregate_usd,
+        )
 
     async def _emit_candidate(self, cluster: WalletCluster, raw_events: list[ScoredEvent], r) -> None:
         candidate = AnomalyCandidate(cluster=cluster, raw_events=raw_events)

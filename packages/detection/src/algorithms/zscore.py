@@ -43,10 +43,21 @@ class ZScoreDetector:
         self._scored    = 0
         self._flagged   = 0
 
-    def score_event(self, event) -> Optional[ScoredEvent]:
+    def threshold_for(self, chain: str) -> float:
+        """Per-chain anomaly threshold (e.g. ZSCORE_THRESHOLD_ARBITRUM)."""
+        return _threshold_for_chain(chain)
+
+    def evaluate(self, event) -> Optional[ScoredEvent]:
         """
-        Score one event. Returns ScoredEvent if anomalous, else None.
-        Also records the event into the baseline regardless of score.
+        Record one event into the baseline and return a ScoredEvent for it —
+        *regardless* of whether it clears the anomaly threshold. `is_anomaly`
+        marks whether it did.
+
+        Returns None only when the event can't be scored yet (insufficient
+        baseline history / zero-variance baseline). Callers that only want
+        anomalies should check `.is_anomaly`; the multi-wallet aggregation
+        path in the detector needs sub-threshold events too, which is why this
+        does not filter — see detector._check_multi_wallet_cluster.
         """
         ts = event.timestamp.timestamp()
 
@@ -75,8 +86,7 @@ class ZScoreDetector:
             return None   # not enough baseline data yet
 
         # Use a per-chain threshold if set (e.g. ZSCORE_THRESHOLD_ARBITRUM)
-        if z < _threshold_for_chain(chain):
-            return None   # normal activity
+        is_anomaly = z >= _threshold_for_chain(chain)
 
         stats = self._store.stats(
             event.pool_address,
@@ -84,11 +94,12 @@ class ZScoreDetector:
             chain=chain,
         )
 
-        self._flagged += 1
-        log.info(
-            "⚡ Anomaly z=%.2f pool=%s type=%s usd=%.0f",
-            z, event.pool_address[:12], event.event_type, event.amount_usd,
-        )
+        if is_anomaly:
+            self._flagged += 1
+            log.info(
+                "⚡ Anomaly z=%.2f pool=%s type=%s usd=%.0f",
+                z, event.pool_address[:12], event.event_type, event.amount_usd,
+            )
 
         return ScoredEvent(
             block_number   = event.block_number,
@@ -103,7 +114,21 @@ class ZScoreDetector:
             z_score        = round(z, 3),
             baseline_mean  = round(stats.mean, 2) if stats else 0.0,
             baseline_std   = round(stats.std, 2)  if stats else 0.0,
+            is_anomaly     = is_anomaly,
         )
+
+    def score_event(self, event) -> Optional[ScoredEvent]:
+        """
+        Score one event. Returns ScoredEvent if anomalous, else None.
+        Also records the event into the baseline regardless of score.
+
+        Thin filter over evaluate() — preserved for callers (and tests) that
+        only care about threshold-clearing anomalies.
+        """
+        scored = self.evaluate(event)
+        if scored is None or not scored.is_anomaly:
+            return None
+        return scored
 
     def score_batch(self, events: list) -> list[ScoredEvent]:
         """Score a batch of events. Returns only the flagged ones."""

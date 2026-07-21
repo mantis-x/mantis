@@ -25,6 +25,7 @@ from src.decoders.event_normaliser import (
     EventNormaliser,
     SWAP_TOPIC, UNIV3_SWAP_TOPIC, MINT_TOPIC, BURN_TOPIC, LB_SWAP_TOPIC,
 )
+from src.decoders.wallet_resolver import WalletResolver
 from src.chains import ChainConfig
 from src.pricing import PriceOracle
 
@@ -54,6 +55,7 @@ class ChainCollector:
         self._on_events    = on_events or self._default_handler
         self._last_block: int = 0
         self._normaliser   = EventNormaliser(config.pool_registry)
+        self._resolver     = WalletResolver(self._w3)
         self._price_oracle = PriceOracle(self._w3, config)
         self._seen: set[str] = set()
 
@@ -133,6 +135,9 @@ class ChainCollector:
                 raw_log, block_ts, prices,
                 chain=self._config.name,
             )
+            # Replace router/NFPM-attributed addresses with the real signing EOA
+            # so distinct actors don't collapse into one proxy address (fix b).
+            event = self._resolver.resolve(event)
             if event and event.unique_id not in self._seen:
                 self._seen.add(event.unique_id)
                 events.append(event)
