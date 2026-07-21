@@ -39,6 +39,12 @@ class ScoredEvent:
     baseline_mean:  float
     baseline_std:   float
 
+    # True if z_score cleared the (per-chain) anomaly threshold. Sub-threshold
+    # events are still emitted by ZScoreDetector.evaluate() so the multi-wallet
+    # path can aggregate them (individually-modest but collectively-coordinated
+    # activity) — only anomalies drive the solo-candidate path.
+    is_anomaly:     bool = False
+
     @property
     def is_buy(self) -> bool:
         return self.event_type in ("swap", "mint")
