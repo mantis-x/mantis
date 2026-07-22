@@ -32,15 +32,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "packages", "sh
 from src.db.connection import get_session
 from src.db.models.signal import SignalRow
 from src.db.models.signal_outcome import SignalOutcomeRow, OutcomeStatus, HORIZONS_HOURS
-from src.tracking.signal_outcome_tracker import DIRECTIONAL_SIGNAL_TYPES
-
-
-def _is_hit(signal_type: str, pct_change: float) -> bool | None:
-    """None if signal_type has no directional claim (e.g. unusual_volume)."""
-    direction = DIRECTIONAL_SIGNAL_TYPES.get(signal_type)
-    if direction is None or pct_change is None:
-        return None
-    return pct_change > 0 if direction == "up" else pct_change < 0
+from src.tracking.signal_outcome_tracker import is_hit as _is_hit
 
 
 def build_report(horizon_filter: str | None = None) -> dict:

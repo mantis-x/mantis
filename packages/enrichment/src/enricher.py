@@ -19,6 +19,7 @@ from src.prompts.signal_classifier import SYSTEM_PROMPT, build_prompt
 from src.parsers.llm_response import parse_llm_response
 from src.models.signal import Signal, SignalType
 from src.nansen import NansenClient
+from src.wallet_track_record import WalletTrackRecordLabeler
 
 log = logging.getLogger(__name__)
 
@@ -38,27 +39,33 @@ class Enricher:
         api_key = api_key or os.getenv("ANTHROPIC_API_KEY", "")
         if not api_key:
             raise ValueError("ANTHROPIC_API_KEY not set")
-        self._client    = anthropic.Anthropic(api_key=api_key)
-        self._nansen    = NansenClient()
+        self._client       = anthropic.Anthropic(api_key=api_key)
+        self._track_record = WalletTrackRecordLabeler()
+        self._nansen       = NansenClient()
         self._enriched  = 0
         self._discarded = 0
         self._errors    = 0
 
     def _label_wallets(self, candidate: dict) -> tuple[str, int]:
         """
-        Best-effort Nansen smart-money labeling for the (at most 5) wallets
-        shown in the prompt. No-ops to ("", 0) if NANSEN_API_KEY is unset —
-        callers fall back to build_prompt's own "(unknown label)" default.
+        Best-effort smart-money labeling for the (at most 5) wallets shown in
+        the prompt. Tries Mantis's own track record first (free, no API key —
+        see wallet_track_record.py) and only falls back to Nansen for a
+        wallet with too few resolved samples, if NANSEN_API_KEY is set. If
+        neither has an opinion, falls back to build_prompt's own "(unknown
+        label)" default.
         """
         wallets = candidate.get("wallets", [])[:5]
-        if not wallets or not self._nansen.is_configured:
+        if not wallets:
             return "", 0
 
         chain = candidate.get("chain", "mantle")
         lines = []
         smart_count = 0
         for i, w in enumerate(wallets):
-            smart = self._nansen.is_smart_money(w, chain)
+            smart = self._track_record.is_smart_money(w)
+            if smart is None and self._nansen.is_configured:
+                smart = self._nansen.is_smart_money(w, chain)
             if smart:
                 smart_count += 1
             tag = "smart money" if smart else "unknown label"
