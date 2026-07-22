@@ -457,7 +457,7 @@ class TestExecutorWalletBalance:
         request = make_request(chain="arbitrum", amount_usd=1.0)
         ex._execute(request)
 
-        ex.guards.check.assert_called_once_with(request, 42.0)
+        ex.guards.check.assert_called_once_with(request, 42.0, 0.0)
 
 
 class TestArbitrumGetWalletBalanceUsd:
@@ -537,7 +537,9 @@ class TestGuardPipelineArbitrum:
     def test_normal_arbitrum_request_passes_guards(self):
         from src.guards.guard_runner import GuardRunner
         runner  = GuardRunner()
-        request = make_request(chain="arbitrum", amount_usd=100.0)
+        # amount_usd within the default $50 absolute trade cap (see
+        # TestAbsoluteCaps in test_guards.py for cap-specific coverage).
+        request = make_request(chain="arbitrum", amount_usd=25.0)
         result  = runner.check(request, wallet_balance_usd=10_000.0)
         assert result  # should pass
 

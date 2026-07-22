@@ -53,17 +53,28 @@ was the most exercised during build-out.
 - [ ] **Real wallet-balance source verified live** — `_wallet_balance_usd` must
       return the true on-chain balance for the position-cap guard to mean
       anything (it raises for unknown chains today — good).
-- [ ] **Hard per-trade and per-day notional caps** — independent of the % guard;
-      an absolute USD ceiling (e.g. start at $10–50/trade) so a pricing bug can't
-      size a huge order. Not present as an absolute cap today; add it.
-- [ ] **Idempotency / double-execution guard** — ensure a signal replayed on the
-      `:exec` queue (or a worker restart mid-trade) can't double-submit. Verify
-      the FIFO consume + any dedup.
-- [ ] **Kill switch** — a single env/flag (or Redis key) the worker checks each
-      loop that halts all execution instantly without a redeploy.
-- [ ] **Slippage guard is real, not the hackathon pass-through** —
-      `guard_runner.py` notes the slippage check is a simplified pass; tighten to
-      a real quote-vs-execution bound before live.
+- [x] **Hard per-trade and per-day notional caps** — **Done 2026-07-23.**
+      `guard_runner.py`'s `_absolute_trade_cap`/`_absolute_daily_cap` (env
+      `MAX_TRADE_USD`=$50, `MAX_DAILY_TRADE_USD`=$200 default), independent of
+      the % guard. Daily spend tracked in Redis by `packages/executor/src/safety.py`,
+      read/written by `worker.py` each loop.
+- [x] **Idempotency / double-execution guard** — **Done 2026-07-23.**
+      `safety.py`'s `is_duplicate_signal()` — an atomic `SET NX` on a signal
+      fingerprint (chain/protocol/pool/type/confidence/z-score/volume/detected_at,
+      deliberately excluding `id` which is often `None` at this stage) — claims a
+      signal before executing so a replay/duplicate push can't double-submit.
+- [x] **Kill switch** — **Done 2026-07-23.** `mantis:execution:kill_switch` Redis
+      key, checked every loop iteration before popping anything off the queue —
+      `python scripts/execution_kill_switch.py on|off|status`. Signals stay
+      queued untouched while active (halt, not drop).
+- [x] **Slippage guard clarified — it was never actually a placeholder** —
+      investigated 2026-07-23: `arbitrum/swap_executor.py`'s `_get_quote()`
+      already calls Uniswap V3's QuoterV2 on-chain immediately before every
+      swap and sets `amountOutMinimum` from that live quote — real
+      quote-vs-execution slippage protection has existed all along. The
+      `guard_runner.py` check is a pre-flight sanity bound on the *requested*
+      tolerance, not a substitute for that — comment updated to stop
+      describing it as an unfinished "hackathon" pass-through.
 - [ ] **Mantle only:** package `byreal-cli` into the Docker image (or drop Mantle
       execution from v1 and go Arbitrum-only).
 
@@ -113,9 +124,13 @@ holder; they gate live trading regardless of code readiness:
 
 ## 7. The flip checklist — ALL must be true before `BYREAL_DRY_RUN=false`
 
-1. [ ] §3 technical items done, Arbitrum-only for v1.
-2. [ ] Absolute per-trade + per-day USD caps live and tested.
-3. [ ] Kill switch tested (halts execution with no redeploy).
+1. [ ] §3 technical items done, Arbitrum-only for v1 — **4/6 done 2026-07-23**
+       (caps, idempotency, kill switch, slippage clarified). Still open: token
+       approval/allowance handling, and Mantle's `byreal-cli` packaging (moot
+       if going Arbitrum-only for v1).
+2. [x] Absolute per-trade + per-day USD caps live and tested. **Done 2026-07-23.**
+3. [x] Kill switch tested (halts execution with no redeploy). **Done 2026-07-23**
+       — verified functionally against a real Redis instance.
 4. [ ] Key custody moved off plaintext env; hot-wallet float capped.
 5. [ ] Security review of the execution path completed and signed off.
 6. [ ] Shadow/paper run on live rails clean for an agreed period.
