@@ -11,11 +11,13 @@ from typing import Optional
 
 
 class SignalType(str, Enum):
-    ACCUMULATION = "accumulation"
-    DISTRIBUTION = "distribution"
-    WHALE_ENTRY  = "whale_entry"
-    WHALE_EXIT   = "whale_exit"
-    UNUSUAL_VOLUME = "unusual_volume"
+    ACCUMULATION      = "accumulation"
+    DISTRIBUTION      = "distribution"
+    WHALE_ENTRY       = "whale_entry"
+    WHALE_EXIT        = "whale_exit"
+    UNUSUAL_VOLUME    = "unusual_volume"
+    LIQUIDITY_ADDED   = "liquidity_added"
+    LIQUIDITY_REMOVED = "liquidity_removed"
 
 
 class Protocol(str, Enum):

@@ -13,11 +13,15 @@ from typing import Optional
 
 
 class SignalType(str, Enum):
-    ACCUMULATION   = "accumulation"
-    DISTRIBUTION   = "distribution"
-    WHALE_ENTRY    = "whale_entry"
-    WHALE_EXIT     = "whale_exit"
-    UNUSUAL_VOLUME = "unusual_volume"
+    ACCUMULATION      = "accumulation"
+    DISTRIBUTION      = "distribution"
+    WHALE_ENTRY       = "whale_entry"
+    WHALE_EXIT        = "whale_exit"
+    UNUSUAL_VOLUME    = "unusual_volume"
+    # mint/burn are liquidity add/remove, not directional buys/sells — kept
+    # distinct from the swap-only directional types above.
+    LIQUIDITY_ADDED   = "liquidity_added"
+    LIQUIDITY_REMOVED = "liquidity_removed"
 
 
 @dataclass
@@ -76,17 +80,19 @@ class WalletCluster:
     signal_type: SignalType = SignalType.UNUSUAL_VOLUME
 
     def __post_init__(self):
-        # Classify signal type based on event type and volume
-        if self.event_type in ("swap", "mint"):
+        # Classify signal type based on event type and volume. mint/burn are
+        # liquidity add/remove, not directional buys/sells, so they get their
+        # own non-directional types rather than being folded into
+        # accumulation/whale_entry/distribution/whale_exit.
+        if self.event_type == "swap":
             if self.total_volume_usd > 500_000:
                 self.signal_type = SignalType.WHALE_ENTRY
             else:
                 self.signal_type = SignalType.ACCUMULATION
+        elif self.event_type == "mint":
+            self.signal_type = SignalType.LIQUIDITY_ADDED
         elif self.event_type == "burn":
-            if self.total_volume_usd > 500_000:
-                self.signal_type = SignalType.WHALE_EXIT
-            else:
-                self.signal_type = SignalType.DISTRIBUTION
+            self.signal_type = SignalType.LIQUIDITY_REMOVED
 
     @property
     def wallet_count(self) -> int:

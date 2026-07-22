@@ -18,6 +18,7 @@ import anthropic
 from src.prompts.signal_classifier import SYSTEM_PROMPT, build_prompt
 from src.parsers.llm_response import parse_llm_response
 from src.models.signal import Signal, SignalType
+from src.nansen import NansenClient
 
 log = logging.getLogger(__name__)
 
@@ -38,16 +39,43 @@ class Enricher:
         if not api_key:
             raise ValueError("ANTHROPIC_API_KEY not set")
         self._client    = anthropic.Anthropic(api_key=api_key)
+        self._nansen    = NansenClient()
         self._enriched  = 0
         self._discarded = 0
         self._errors    = 0
+
+    def _label_wallets(self, candidate: dict) -> tuple[str, int]:
+        """
+        Best-effort Nansen smart-money labeling for the (at most 5) wallets
+        shown in the prompt. No-ops to ("", 0) if NANSEN_API_KEY is unset —
+        callers fall back to build_prompt's own "(unknown label)" default.
+        """
+        wallets = candidate.get("wallets", [])[:5]
+        if not wallets or not self._nansen.is_configured:
+            return "", 0
+
+        chain = candidate.get("chain", "mantle")
+        lines = []
+        smart_count = 0
+        for i, w in enumerate(wallets):
+            smart = self._nansen.is_smart_money(w, chain)
+            if smart:
+                smart_count += 1
+            tag = "smart money" if smart else "unknown label"
+            lines.append(f"  {i+1}. {w[:12]}...{w[-6:]} ({tag})")
+
+        if len(candidate.get("wallets", [])) > 5:
+            lines.append(f"  ... and {len(candidate['wallets']) - 5} more")
+
+        return "\n".join(lines), smart_count
 
     def enrich(self, candidate: dict) -> Optional[Signal]:
         """
         Enrich one AnomalyCandidate dict into a Signal.
         Returns None if confidence < MIN_CONFIDENCE or Claude call fails.
         """
-        prompt = build_prompt(candidate)
+        wallet_details, smart_money_count = self._label_wallets(candidate)
+        prompt = build_prompt(candidate, wallet_details=wallet_details)
         raw    = self._call_claude(prompt)
 
         if raw is None:
@@ -85,6 +113,7 @@ class Enricher:
             z_score         = float(candidate.get("z_score", 0)),
             total_volume_usd= float(candidate.get("total_volume_usd", 0)),
             event_type      = candidate.get("event_type", "swap"),
+            smart_money_count = smart_money_count,
         )
 
         self._enriched += 1
