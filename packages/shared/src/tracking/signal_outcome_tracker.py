@@ -15,6 +15,13 @@ Signal types imply a direction: ACCUMULATION / WHALE_ENTRY predict the
 asset moves up; DISTRIBUTION / WHALE_EXIT predict it moves down;
 UNUSUAL_VOLUME makes no directional claim (excluded from hit-rate scoring,
 included in the raw price-move stats).
+
+This is also where a wallet's own track record gets built: when a
+directional outcome resolves at the canonical horizon (see
+WALLET_TRACK_RECORD_HORIZON), every wallet in that signal's cluster gets a
+hit/total counter bumped in Redis. packages/enrichment/src/wallet_track_record.py
+reads those counters back out to label "smart money" wallets from Mantis's
+own history instead of a paid third-party API.
 """
 from __future__ import annotations
 
@@ -40,10 +47,29 @@ DIRECTIONAL_SIGNAL_TYPES = {
     "whale_exit":   "down",
 }
 
+# One horizon per signal is used to update wallet track records — using all
+# four would count the same event up to 4x and overweight frequent wallets.
+# 24h is long enough for a directional call to have actually played out.
+WALLET_TRACK_RECORD_HORIZON = "24h"
+WALLET_HITS_KEY  = "mantis:wallet_track_record:hits"
+WALLET_TOTAL_KEY = "mantis:wallet_track_record:total"
+
+
+def is_hit(signal_type: str, pct_change: float | None) -> bool | None:
+    """None if signal_type has no directional claim (e.g. unusual_volume/liquidity_added)."""
+    direction = DIRECTIONAL_SIGNAL_TYPES.get(signal_type)
+    if direction is None or pct_change is None:
+        return None
+    return pct_change > 0 if direction == "up" else pct_change < 0
+
 
 class SignalOutcomeTracker:
-    def __init__(self, price_reader: LivePriceReader | None = None):
+    def __init__(self, price_reader: LivePriceReader | None = None, redis_client=None):
         self._price_reader = price_reader or LivePriceReader()
+        # Sync Redis client (not the async one the tracking worker uses for its
+        # queue) — bumping two counters is a cheap blocking call, same pattern
+        # as every other synchronous-call-inside-an-async-loop in this codebase.
+        self._redis = redis_client
 
     def persist_signal(self, session: Session, signal_dict: dict) -> SignalRow:
         """Insert one signal (from the mantis:signals payload shape) as a durable row."""
@@ -98,18 +124,17 @@ class SignalOutcomeTracker:
         """
         now = now or datetime.now(tz=timezone.utc)
         due = (
-            session.query(SignalOutcomeRow)
+            session.query(SignalOutcomeRow, SignalRow)
+            .join(SignalRow, SignalOutcomeRow.signal_id == SignalRow.id)
             .filter(SignalOutcomeRow.status == OutcomeStatus.PENDING)
             .filter(SignalOutcomeRow.due_at <= now)
             .all()
         )
 
         processed = 0
-        for outcome in due:
+        for outcome, signal in due:
             try:
-                price_now = self._price_reader.get_price(
-                    _chain_for_outcome(session, outcome), outcome.price_key
-                )
+                price_now = self._price_reader.get_price(signal.chain, outcome.price_key)
                 if outcome.entry_price_usd:
                     outcome.pct_change = round(
                         (price_now - outcome.entry_price_usd) / outcome.entry_price_usd * 100, 4
@@ -119,6 +144,9 @@ class SignalOutcomeTracker:
                 outcome.price_usd  = price_now
                 outcome.status     = OutcomeStatus.COMPLETED
                 outcome.checked_at = now
+
+                if outcome.horizon_label == WALLET_TRACK_RECORD_HORIZON:
+                    self._record_wallet_outcomes(signal, outcome.pct_change)
             except Exception as exc:
                 log.warning(
                     "check_due_outcomes: price lookup failed for outcome id=%s (%s) — marking failed",
@@ -130,9 +158,24 @@ class SignalOutcomeTracker:
 
         return processed
 
+    def _record_wallet_outcomes(self, signal: SignalRow, pct_change: float | None) -> None:
+        """Bump each wallet's hit/total counters for this signal's directional call."""
+        if self._redis is None or not signal.wallets:
+            return
+        hit = is_hit(signal.signal_type, pct_change)
+        if hit is None:
+            return  # non-directional signal type (unusual_volume, liquidity_added/removed)
 
-def _chain_for_outcome(session: Session, outcome: SignalOutcomeRow) -> str:
-    return session.query(SignalRow.chain).filter(SignalRow.id == outcome.signal_id).scalar()
+        try:
+            pipe = self._redis.pipeline()
+            for wallet in signal.wallets:
+                key = wallet.lower()
+                pipe.hincrby(WALLET_TOTAL_KEY, key, 1)
+                if hit:
+                    pipe.hincrby(WALLET_HITS_KEY, key, 1)
+            pipe.execute()
+        except Exception as exc:
+            log.warning("Wallet track-record Redis update failed: %s", exc)
 
 
 def _parse_dt(value) -> datetime:

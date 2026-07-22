@@ -42,9 +42,15 @@ async def main() -> None:
     log.info("=" * 55)
 
     redis_url = os.getenv("REDIS_URL", "redis://localhost:6379/0")
-    tracker   = SignalOutcomeTracker()
 
+    import redis as sync_redis
     import redis.asyncio as aioredis
+    # Sync client for wallet track-record writes inside check_due_outcomes
+    # (already a blocking call alongside sync Postgres) — separate from the
+    # async client below, which only serves the mantis:signals:tracking queue.
+    wallet_redis = sync_redis.from_url(redis_url, decode_responses=True)
+    tracker = SignalOutcomeTracker(redis_client=wallet_redis)
+
     r = aioredis.from_url(redis_url, decode_responses=True)
 
     log.info("Listening on Redis mantis:signals:tracking ...")

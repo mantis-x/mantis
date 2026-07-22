@@ -10,7 +10,10 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from src.tracking.signal_outcome_tracker import SignalOutcomeTracker, DIRECTIONAL_SIGNAL_TYPES
+from src.tracking.signal_outcome_tracker import (
+    SignalOutcomeTracker, DIRECTIONAL_SIGNAL_TYPES, is_hit,
+    WALLET_HITS_KEY, WALLET_TOTAL_KEY,
+)
 from src.db.models.signal import SignalRow
 from src.db.models.signal_outcome import SignalOutcomeRow, OutcomeStatus, HORIZONS_HOURS
 
@@ -188,3 +191,112 @@ class TestDirectionalSignalTypes:
 
     def test_unusual_volume_has_no_directional_claim(self):
         assert "unusual_volume" not in DIRECTIONAL_SIGNAL_TYPES
+
+
+class TestIsHit:
+    def test_up_signal_hits_on_positive_move(self):
+        assert is_hit("accumulation", 5.0) is True
+        assert is_hit("whale_entry", -5.0) is False
+
+    def test_down_signal_hits_on_negative_move(self):
+        assert is_hit("distribution", -5.0) is True
+        assert is_hit("whale_exit", 5.0) is False
+
+    def test_non_directional_types_return_none(self):
+        assert is_hit("unusual_volume", 5.0) is None
+        assert is_hit("liquidity_added", 5.0) is None
+        assert is_hit("liquidity_removed", -5.0) is None
+
+    def test_none_pct_change_returns_none(self):
+        assert is_hit("accumulation", None) is None
+
+
+class TestWalletTrackRecordWrite:
+    """
+    check_due_outcomes should bump per-wallet hit/total counters in Redis at
+    the 24h horizon only, and only for directional signal types — this is
+    the write side packages/enrichment/src/wallet_track_record.py reads back.
+    """
+
+    def _mock_reader(self, prices):
+        reader = MagicMock()
+        reader.get_price.side_effect = prices
+        return reader
+
+    def test_24h_hit_increments_both_counters(self, db_session):
+        import fakeredis
+        r = fakeredis.FakeStrictRedis(decode_responses=True)
+
+        # entry=1000, then 1h/4h/24h/7d checks all return 1100 (a 10% gain —
+        # a hit for an "accumulation"/up-direction signal at every horizon).
+        reader = self._mock_reader([1000.0, 1100.0, 1100.0, 1100.0, 1100.0])
+        tracker = SignalOutcomeTracker(price_reader=reader, redis_client=r)
+
+        past = datetime.now(tz=timezone.utc) - timedelta(days=8)
+        row = tracker.persist_signal(
+            db_session, _signal_dict(detected_at=past.isoformat(), wallets=["0xAAA", "0xBBB"])
+        )
+        tracker.schedule_outcomes(db_session, row)
+        db_session.commit()
+
+        tracker.check_due_outcomes(db_session, now=datetime.now(tz=timezone.utc))
+        db_session.commit()
+
+        assert r.hget(WALLET_TOTAL_KEY, "0xaaa") == "1"
+        assert r.hget(WALLET_HITS_KEY, "0xaaa") == "1"
+        assert r.hget(WALLET_TOTAL_KEY, "0xbbb") == "1"
+        assert r.hget(WALLET_HITS_KEY, "0xbbb") == "1"
+
+    def test_24h_miss_increments_total_but_not_hits(self, db_session):
+        import fakeredis
+        r = fakeredis.FakeStrictRedis(decode_responses=True)
+
+        # 10% loss — a miss for an "accumulation" (up-direction) signal.
+        reader = self._mock_reader([1000.0, 900.0, 900.0, 900.0, 900.0])
+        tracker = SignalOutcomeTracker(price_reader=reader, redis_client=r)
+
+        past = datetime.now(tz=timezone.utc) - timedelta(days=8)
+        row = tracker.persist_signal(
+            db_session, _signal_dict(detected_at=past.isoformat(), wallets=["0xCCC"])
+        )
+        tracker.schedule_outcomes(db_session, row)
+        db_session.commit()
+
+        tracker.check_due_outcomes(db_session, now=datetime.now(tz=timezone.utc))
+        db_session.commit()
+
+        assert r.hget(WALLET_TOTAL_KEY, "0xccc") == "1"
+        assert r.hget(WALLET_HITS_KEY, "0xccc") is None
+
+    def test_non_directional_signal_type_does_not_write(self, db_session):
+        import fakeredis
+        r = fakeredis.FakeStrictRedis(decode_responses=True)
+
+        reader = self._mock_reader([1000.0, 1100.0, 1100.0, 1100.0, 1100.0])
+        tracker = SignalOutcomeTracker(price_reader=reader, redis_client=r)
+
+        past = datetime.now(tz=timezone.utc) - timedelta(days=8)
+        row = tracker.persist_signal(
+            db_session,
+            _signal_dict(detected_at=past.isoformat(), wallets=["0xDDD"], signal_type="liquidity_added"),
+        )
+        tracker.schedule_outcomes(db_session, row)
+        db_session.commit()
+
+        tracker.check_due_outcomes(db_session, now=datetime.now(tz=timezone.utc))
+        db_session.commit()
+
+        assert r.hget(WALLET_TOTAL_KEY, "0xddd") is None
+
+    def test_no_redis_client_does_not_crash(self, db_session):
+        """redis_client=None (the default) must be a safe no-op, not a crash."""
+        reader = self._mock_reader([1000.0, 1100.0, 1100.0, 1100.0, 1100.0])
+        tracker = SignalOutcomeTracker(price_reader=reader)  # no redis_client
+
+        past = datetime.now(tz=timezone.utc) - timedelta(days=8)
+        row = tracker.persist_signal(db_session, _signal_dict(detected_at=past.isoformat()))
+        tracker.schedule_outcomes(db_session, row)
+        db_session.commit()
+
+        processed = tracker.check_due_outcomes(db_session, now=datetime.now(tz=timezone.utc))
+        assert processed == 4
