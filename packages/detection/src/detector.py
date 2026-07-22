@@ -59,6 +59,28 @@ _MULTIWALLET_EXCLUDE_TYPES = set(
 # redeploy if that ever needs revisiting.
 _MULTIWALLET_MIN_USD = float(os.getenv("MULTIWALLET_MIN_USD", "100000"))
 
+# Ceiling on a multi-wallet cluster's wallet count. Found 2026-07-23: once
+# the UNIV3_SWAP_TOPIC fix (see PROJECT_STATE.md #30) let real Uniswap V3
+# swaps flow on Arbitrum/Ethereum for the first time, a liquid pool like
+# Ethereum's USDC/WETH naturally has dozens of DISTINCT unrelated wallets
+# trading within any 30-min window — that's ordinary market liquidity, not
+# coordination. Real coordinated accumulation (the signals this project has
+# actually produced) involved a small, plausible number of related actors —
+# observed as high as 5-6 wallets, never dozens. Beyond this ceiling, treat
+# the window as organic volume and don't emit, however large the aggregate.
+_MULTIWALLET_MAX_WALLETS = int(os.getenv("MULTIWALLET_MAX_WALLETS", "15"))
+
+# Cooldown before the SAME (pool, event_type) can emit another multi-wallet
+# candidate at all, regardless of new wallets joining. Found 2026-07-23: the
+# wallet-set-signature dedup only suppresses re-emitting the exact same
+# group — a busy pool where a new distinct wallet trades every few seconds
+# produced a fresh "larger" signature (and a fresh alert) roughly every
+# 20-60 seconds, all describing the same ongoing organic trading, not dozens
+# of distinct events. This cooldown caps it to at most one alert per window
+# per pool — a genuinely new coordination event still gets through once the
+# cooldown lapses.
+MULTIWALLET_COOLDOWN_MINUTES = int(os.getenv("MULTIWALLET_COOLDOWN_MINUTES", str(CLUSTER_WINDOW_MINUTES)))
+
 # Cooldown before the same (wallet, pool, event_type) can fire a second solo
 # candidate — found 2026-07-19: the same wallet's repeat activity on one pool
 # (e.g. baseline recalculating between two mints seconds apart) was producing
@@ -182,6 +204,9 @@ class Detector:
         # within the window, while still allowing a genuinely larger cluster (a new
         # wallet joining) to be emitted as its own candidate.
         self._emitted_signatures: dict[tuple, dict[frozenset, datetime]] = defaultdict(dict)
+        # Last time a multi-wallet candidate was emitted per (pool, event_type)
+        # — see MULTIWALLET_COOLDOWN_MINUTES above for why this exists.
+        self._multiwallet_last_emitted: dict[tuple, datetime] = {}
 
         # Solo-signal dedup — found 2026-07-19: the solo emission path had no
         # cooldown at all, so the same wallet repeating the same action on the
@@ -311,6 +336,12 @@ class Detector:
         if len(wallets) < MIN_CLUSTER_SIZE:
             return   # not multi-wallet yet — solo path already handled anomalies
 
+        # Ceiling: beyond this many distinct wallets in the window, this is
+        # ordinary market liquidity on a busy pool, not coordination — see the
+        # constant's docstring (found 2026-07-23 on Ethereum's blue-chip pools).
+        if len(wallets) > _MULTIWALLET_MAX_WALLETS:
+            return
+
         # Aggregate the combined volume of the coordinated window and z-score it
         # against the same (pool, event_type) hourly baseline the solo path uses.
         # A 30-min window is <= one baseline bucket, so this is a conservative
@@ -327,14 +358,26 @@ class Detector:
         if z_agg is None or z_agg < self._scorer.threshold_for(scored.chain):
             return
 
+        # Cooldown: at most one multi-wallet emission per (pool, event_type)
+        # per MULTIWALLET_COOLDOWN_MINUTES, regardless of new wallets joining.
+        # Found 2026-07-23: without this, a busy pool where a new distinct
+        # wallet trades every few seconds produced a fresh "larger" signature
+        # (see below) — and a fresh alert — roughly every 20-60 seconds, all
+        # describing the same ongoing organic trading, not distinct events.
+        last_emitted = self._multiwallet_last_emitted.get(key)
+        if last_emitted is not None and scored.timestamp - last_emitted < timedelta(minutes=MULTIWALLET_COOLDOWN_MINUTES):
+            return
+
         # Dedup by exact wallet set — a genuinely new wallet joining yields a
         # larger set (new signature) and re-emits; the same group repeating does
         # not. Suppressed groups still stay in the buffer, so a later join still
-        # forms the larger cluster.
+        # forms the larger cluster. (The cooldown above already blocks nearly
+        # all of what this used to catch alone; kept as a secondary guard.)
         signature = frozenset(wallets)
         if signature in sigs:
             return
         sigs[signature] = scored.timestamp
+        self._multiwallet_last_emitted[key] = scored.timestamp
 
         cluster = WalletCluster(
             wallets          = list(wallets),
