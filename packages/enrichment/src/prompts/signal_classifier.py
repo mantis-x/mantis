@@ -22,9 +22,14 @@ Required schema:
 {
   "summary": "<2 sentences max. First: what happened. Second: why it matters. Plain English, no jargon.>",
   "confidence": <integer 0-100>,
-  "signal_type": "<exactly one of: accumulation|distribution|whale_entry|whale_exit|unusual_volume>",
+  "signal_type": "<exactly one of: accumulation|distribution|whale_entry|whale_exit|unusual_volume|liquidity_added|liquidity_removed>",
   "key_factors": ["<factor 1>", "<factor 2>", "<factor 3>"]
 }
+
+signal_type rules — event type determines the eligible set, do not cross them:
+- EVENT TYPE "mint" → always "liquidity_added". Never accumulation/whale_entry: adding liquidity is not a directional buy, an LP position is often market-neutral.
+- EVENT TYPE "burn" → always "liquidity_removed". Never distribution/whale_exit, for the same reason.
+- EVENT TYPE "swap" or "transfer" → these represent real directional pressure, so choose accumulation/whale_entry/distribution/whale_exit/unusual_volume based on direction and size as usual.
 
 Confidence calibration:
 - 85-100: Strong multi-wallet cluster (3+ wallets), z-score > 4.0, pattern matches known smart money behaviour
@@ -70,16 +75,17 @@ def build_prompt(candidate: dict, wallet_details: str = "") -> str:
     event_type = candidate.get("event_type", "swap")
     vol        = float(candidate.get("total_volume_usd", 0))
 
-    # Determine pattern description
+    # Determine pattern description. mint/burn checked first since they map to
+    # a fixed non-directional signal_type regardless of wallet count/z-score.
     wallet_count = len(wallets)
-    if wallet_count >= 3 and z_score >= 4.0:
+    if event_type == "mint":
+        pattern = f"Liquidity added by {wallet_count} wallet(s) — not a directional buy signal on its own"
+    elif event_type == "burn":
+        pattern = f"Liquidity removed by {wallet_count} wallet(s) — not a directional sell signal on its own"
+    elif wallet_count >= 3 and z_score >= 4.0:
         pattern = f"Coordinated movement — {wallet_count} wallets acting in concert"
     elif wallet_count == 1 and z_score >= 4.0:
         pattern = "Single large wallet — potential whale entry/exit"
-    elif event_type == "mint":
-        pattern = "Liquidity being added — possible accumulation setup"
-    elif event_type == "burn":
-        pattern = "Liquidity being removed — possible distribution or exit"
     else:
         pattern = f"Unusual {event_type} activity above statistical baseline"
 

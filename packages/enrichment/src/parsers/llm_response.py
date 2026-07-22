@@ -14,7 +14,8 @@ log = logging.getLogger(__name__)
 
 VALID_SIGNAL_TYPES = {
     "accumulation", "distribution",
-    "whale_entry", "whale_exit", "unusual_volume"
+    "whale_entry", "whale_exit", "unusual_volume",
+    "liquidity_added", "liquidity_removed",
 }
 
 

@@ -21,19 +21,23 @@ PROTOCOL_NAMES = {
 }
 
 SIGNAL_EMOJIS = {
-    "accumulation":   "📈",
-    "distribution":   "📉",
-    "whale_entry":    "🐋",
-    "whale_exit":     "🚨",
-    "unusual_volume": "⚡",
+    "accumulation":      "📈",
+    "distribution":      "📉",
+    "whale_entry":       "🐋",
+    "whale_exit":        "🚨",
+    "unusual_volume":    "⚡",
+    "liquidity_added":   "💧",
+    "liquidity_removed": "🔻",
 }
 
 SIGNAL_LABELS = {
-    "accumulation":   "Accumulation",
-    "distribution":   "Distribution",
-    "whale_entry":    "Whale Entry",
-    "whale_exit":     "Whale Exit",
-    "unusual_volume": "Unusual Volume",
+    "accumulation":      "Accumulation",
+    "distribution":      "Distribution",
+    "whale_entry":       "Whale Entry",
+    "whale_exit":        "Whale Exit",
+    "unusual_volume":    "Unusual Volume",
+    "liquidity_added":   "Liquidity Added",
+    "liquidity_removed": "Liquidity Removed",
 }
 
 # Per-chain explorer base URLs and display names
@@ -48,6 +52,14 @@ CHAIN_META = {
 def _chain_meta(chain: str) -> tuple[str, str]:
     """Return (explorer_base, display_name) for a chain slug."""
     return CHAIN_META.get(chain, (f"https://{chain}.explorer", chain.capitalize()))
+
+
+def wallets_line(wallets: list, smart_money_count: int) -> str:
+    """'3 detected' or '3 detected (2 smart money)' if any are labeled."""
+    base = f"{len(wallets)} detected"
+    if smart_money_count > 0:
+        base += f" ({smart_money_count} smart money)"
+    return base
 
 
 def confidence_bar(score: int) -> str:
@@ -81,6 +93,7 @@ def format_signal_card(signal: dict, audit_tx_hash: Optional[str] = None) -> str
     event_type   = signal.get("event_type", "swap")
     pool_address = signal.get("pool_address", "")
     wallets      = signal.get("wallets", [])
+    smart_money  = int(signal.get("smart_money_count", 0))
 
     emoji        = SIGNAL_EMOJIS.get(signal_type, "🔍")
     label        = SIGNAL_LABELS.get(signal_type, "Signal")
@@ -97,7 +110,7 @@ def format_signal_card(signal: dict, audit_tx_hash: Optional[str] = None) -> str
         f"<b>Signal</b>  {confidence_bar(confidence)}",
         f"<b>Volume</b>  {format_usd(volume_usd)} ({event_type})",
         f"<b>Z-score</b>  {z_score:.2f}σ above 14-day baseline",
-        f"<b>Wallets</b>  {len(wallets)} detected",
+        f"<b>Wallets</b>  {wallets_line(wallets, smart_money)}",
         "",
         f"📋 <b>What happened</b>",
         f"{summary}",
@@ -140,6 +153,7 @@ def format_signal_card_markdown(signal: dict, audit_tx_hash: Optional[str] = Non
     event_type   = signal.get("event_type", "swap")
     pool_address = signal.get("pool_address", "")
     wallets      = signal.get("wallets", [])
+    smart_money  = int(signal.get("smart_money_count", 0))
 
     emoji        = SIGNAL_EMOJIS.get(signal_type, "🔍")
     label        = SIGNAL_LABELS.get(signal_type, "Signal")
@@ -156,7 +170,7 @@ def format_signal_card_markdown(signal: dict, audit_tx_hash: Optional[str] = Non
         f"**Signal**  {confidence_bar(confidence)}",
         f"**Volume**  {format_usd(volume_usd)} ({event_type})",
         f"**Z-score**  {z_score:.2f}σ above 14-day baseline",
-        f"**Wallets**  {len(wallets)} detected",
+        f"**Wallets**  {wallets_line(wallets, smart_money)}",
         "",
         "📋 **What happened**",
         summary,
@@ -199,6 +213,7 @@ def format_signal_card_plain(signal: dict, audit_tx_hash: Optional[str] = None) 
     event_type   = signal.get("event_type", "swap")
     pool_address = signal.get("pool_address", "")
     wallets      = signal.get("wallets", [])
+    smart_money  = int(signal.get("smart_money_count", 0))
 
     emoji        = SIGNAL_EMOJIS.get(signal_type, "🔍")
     label        = SIGNAL_LABELS.get(signal_type, "Signal")
@@ -215,7 +230,7 @@ def format_signal_card_plain(signal: dict, audit_tx_hash: Optional[str] = None) 
         f"Signal  {confidence_bar(confidence)}",
         f"Volume  {format_usd(volume_usd)} ({event_type})",
         f"Z-score  {z_score:.2f}σ above 14-day baseline",
-        f"Wallets  {len(wallets)} detected",
+        f"Wallets  {wallets_line(wallets, smart_money)}",
         "",
         "What happened:",
         summary,

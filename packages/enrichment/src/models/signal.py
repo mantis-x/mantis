@@ -11,11 +11,16 @@ import os
 
 
 class SignalType(str, Enum):
-    ACCUMULATION   = "accumulation"
-    DISTRIBUTION   = "distribution"
-    WHALE_ENTRY    = "whale_entry"
-    WHALE_EXIT     = "whale_exit"
-    UNUSUAL_VOLUME = "unusual_volume"
+    ACCUMULATION      = "accumulation"
+    DISTRIBUTION      = "distribution"
+    WHALE_ENTRY       = "whale_entry"
+    WHALE_EXIT        = "whale_exit"
+    UNUSUAL_VOLUME    = "unusual_volume"
+    # Uniswap V3 mint/burn are liquidity add/remove, not directional buys/sells —
+    # an LP is often market-neutral, so these are kept distinct from the
+    # swap-only directional types above.
+    LIQUIDITY_ADDED   = "liquidity_added"
+    LIQUIDITY_REMOVED = "liquidity_removed"
 
 
 @dataclass
@@ -52,6 +57,11 @@ class Signal:
 
     # Audit (set after on-chain logging)
     audit_tx_hash: Optional[str] = None
+
+    # How many of `wallets` carry Nansen's `smart_money` label. Best-effort —
+    # stays 0 whenever NANSEN_API_KEY is unset or a lookup fails, which must
+    # not be read as "confirmed not smart money," just "unlabeled."
+    smart_money_count: int = 0
 
     def __post_init__(self):
         if self.deliver_at is None:
@@ -94,6 +104,7 @@ class Signal:
             "total_volume_usd": self.total_volume_usd,
             "event_type":      self.event_type,
             "audit_tx_hash":   self.audit_tx_hash,
+            "smart_money_count": self.smart_money_count,
         }
 
     @property
@@ -104,6 +115,8 @@ class Signal:
             SignalType.WHALE_ENTRY:    "🐋",
             SignalType.WHALE_EXIT:     "🚨",
             SignalType.UNUSUAL_VOLUME: "⚡",
+            SignalType.LIQUIDITY_ADDED:   "💧",
+            SignalType.LIQUIDITY_REMOVED: "🔻",
         }.get(self.signal_type, "🔍")
 
     @property
