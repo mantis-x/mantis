@@ -50,23 +50,23 @@ CHAIN = "testchain"
 NOW   = datetime(2026, 7, 21, 12, 0, 0, tzinfo=timezone.utc)
 
 
-def _seed(detector, mean, pool=POOL, etype="swap"):
+def _seed(detector, mean, pool=POOL, etype="swap", chain=CHAIN):
     # 48 hourly buckets around `mean` with non-zero variance so std > 0.
     history = []
     for i in range(48):
         ts = (NOW - timedelta(hours=48 - i)).timestamp()
         vol = mean + ((i % 5) - 2) * (mean * 0.2)   # +-40% swing, mean preserved
         history.append({
-            "chain": CHAIN, "pool_address": pool,
+            "chain": chain, "pool_address": pool,
             "event_type": etype, "amount_usd": vol, "timestamp": ts,
         })
     detector._store.seed_from_historical(history)
 
 
-def _event(wallet, usd, offset_min, pool=POOL, etype="swap"):
+def _event(wallet, usd, offset_min, pool=POOL, etype="swap", chain=CHAIN):
     ts = (NOW + timedelta(minutes=offset_min)).isoformat()
     return {
-        "chain": CHAIN, "block": 1, "tx_full": f"0x{wallet[-4:]}{offset_min}",
+        "chain": chain, "block": 1, "tx_full": f"0x{wallet[-4:]}{offset_min}",
         "protocol": "uniswap_v3", "pool_full": pool,
         "wallet_full": wallet, "type": etype, "usd": usd, "ts": ts,
     }
@@ -271,3 +271,62 @@ def test_below_min_usd_suppressed():
 
     multi = [c for c in _candidates(fake) if len(c["wallets"]) >= 2]
     assert not multi, f"sub-${_MULTIWALLET_MIN_USD:.0f} cluster should be suppressed: {multi}"
+
+
+class TestPerChainMinUsdOverride:
+    """
+    2026-07-23: MULTIWALLET_MIN_USD_<CHAIN> lets a chain's floor be raised
+    (e.g. Ethereum) without touching the global default or other chains —
+    same pattern as zscore.py's ZSCORE_THRESHOLD_<CHAIN>. Each test uses its
+    own unique chain name since the override is cached per-chain for the
+    life of the process.
+    """
+
+    def test_override_raises_floor_for_that_chain_only(self, monkeypatch):
+        chain = "testchain_override_a"
+        monkeypatch.setenv(f"MULTIWALLET_MIN_USD_{chain.upper()}", "1000000")
+
+        import importlib
+        from src import detector as detector_module
+        importlib.reload(detector_module)
+
+        detector = detector_module.Detector(redis_url="")
+        _seed(detector, mean=20_000, chain=chain)
+        fake = FakeRedis()
+
+        async def run():
+            # 6 wallets * $20k = $120k — clears the global $100k floor, but
+            # not the $1M override for this chain.
+            for n, w in enumerate(["aaaa", "bbbb", "cccc", "dddd", "eeee", "ffff"]):
+                await detector._process(_event(f"0xwallet{w}", 20_000, n, chain=chain), fake)
+
+        asyncio.run(run())
+
+        multi = [c for c in _candidates(fake) if len(c["wallets"]) >= 2]
+        assert not multi, f"the $1M override should suppress a $120k cluster: {multi}"
+
+        importlib.reload(detector_module)  # restore clean module state
+
+    def test_other_chains_unaffected_by_one_chains_override(self, monkeypatch):
+        overridden_chain = "testchain_override_b"
+        unaffected_chain = "testchain_override_c"
+        monkeypatch.setenv(f"MULTIWALLET_MIN_USD_{overridden_chain.upper()}", "1000000")
+
+        import importlib
+        from src import detector as detector_module
+        importlib.reload(detector_module)
+
+        detector = detector_module.Detector(redis_url="")
+        _seed(detector, mean=20_000, chain=unaffected_chain)
+        fake = FakeRedis()
+
+        async def run():
+            for n, w in enumerate(["aaaa", "bbbb", "cccc", "dddd", "eeee", "ffff"]):
+                await detector._process(_event(f"0xwallet{w}", 20_000, n, chain=unaffected_chain), fake)
+
+        asyncio.run(run())
+
+        multi = [c for c in _candidates(fake) if len(c["wallets"]) >= 2]
+        assert multi, f"a chain without its own override should keep the $100k default: {multi}"
+
+        importlib.reload(detector_module)  # restore clean module state

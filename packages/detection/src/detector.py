@@ -59,6 +59,22 @@ _MULTIWALLET_EXCLUDE_TYPES = set(
 # redeploy if that ever needs revisiting.
 _MULTIWALLET_MIN_USD = float(os.getenv("MULTIWALLET_MIN_USD", "100000"))
 
+# Per-chain override cache, same pattern as zscore.py's ZSCORE_THRESHOLD_<CHAIN>.
+# Added 2026-07-23: Ethereum's real swap volume (only decodable since #30's
+# topic fix) still produces $260-270K multi-wallet clusters at 62-68%
+# confidence — legitimate per the $100k floor, but watched live to see if
+# they're too frequent to be useful. Set MULTIWALLET_MIN_USD_ETHEREUM (e.g.
+# to 1000000) to raise Ethereum's floor specifically without touching
+# Arbitrum/Mantle/HashKey or redeploying.
+_multiwallet_min_usd_cache: dict[str, float] = {}
+
+
+def _multiwallet_min_usd_for_chain(chain: str) -> float:
+    if chain not in _multiwallet_min_usd_cache:
+        env_key = f"MULTIWALLET_MIN_USD_{chain.upper()}"
+        _multiwallet_min_usd_cache[chain] = float(os.getenv(env_key, str(_MULTIWALLET_MIN_USD)))
+    return _multiwallet_min_usd_cache[chain]
+
 # Ceiling on a multi-wallet cluster's wallet count. Found 2026-07-23: once
 # the UNIV3_SWAP_TOPIC fix (see PROJECT_STATE.md #30) let real Uniswap V3
 # swaps flow on Arbitrum/Ethereum for the first time, a liquid pool like
@@ -349,7 +365,7 @@ class Detector:
         # on normal activity, only when a short-window multi-wallet burst already
         # exceeds a typical *hour* of volume by the threshold.
         aggregate_usd = sum(e.amount_usd for e in buf)
-        if aggregate_usd < _MULTIWALLET_MIN_USD:
+        if aggregate_usd < _multiwallet_min_usd_for_chain(scored.chain):
             return   # not economically meaningful — don't spend an enrichment call
 
         z_agg = self._store.z_score(
