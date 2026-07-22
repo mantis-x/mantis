@@ -143,11 +143,12 @@ possible cap**, watched live.
 
 ## 8. Recommended sequence
 
-1. Keep Execute dry-run. Do the **safe Phase 2 work first** (Discord/LINE,
-   billing/Pro tier) to build real product + revenue while Execute's gate is
-   assembled.
+1. Keep Execute dry-run. Do the **safe Phase 2 work first** (billing/Pro
+   tier) to build real revenue while Execute's gate is assembled. Discord/LINE
+   reprioritized out of active Phase 2 as of 2026-07-23 — future scale-up
+   roadmap, not current-phase work (see PROJECT_STATE.md Known Bugs).
 2. Land §3 code prerequisites (caps, kill switch, idempotency, real slippage)
-   behind the dry-run flag — safe to build now, changes nothing live.
+   behind the dry-run flag — safe to build now, changes nothing live. **4/6 done 2026-07-23.**
 3. Resolve §5 custody + §6 legal in parallel (these are the long poles).
 4. Shadow-run on live rails.
 5. Flip Arbitrum at minimal size once §7 is fully green.
