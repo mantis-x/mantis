@@ -53,10 +53,14 @@ class Executor:
             DRY_RUN,
         )
 
-    def process_signal(self, signal: dict) -> list[ExecutionResult]:
+    def process_signal(self, signal: dict, daily_spent_usd: float = 0.0) -> list[ExecutionResult]:
         """
         Process one signal against all active agents.
         Returns list of ExecutionResult (one per agent that evaluated).
+
+        daily_spent_usd: cumulative USD already executed today (UTC), tracked
+        by the caller (worker.py, via packages/executor/src/safety.py) and
+        passed through to the absolute daily cap guard.
         """
         results = []
         agents  = self.registry.get_active_agents()
@@ -84,7 +88,12 @@ class Executor:
             if request is None:
                 continue   # signal didn't match this agent's rules
 
-            result = self._execute(request)
+            result = self._execute(request, daily_spent_usd)
+            if result.success and result.amount_usd:
+                # Running total within this call — so if more than one agent
+                # matches the same signal, the second agent's guard check
+                # sees the first agent's spend too, not a stale snapshot.
+                daily_spent_usd += result.amount_usd
             self.registry.record_execution(agent.agent_id, result.success)
             results.append(result)
 
@@ -115,12 +124,12 @@ class Executor:
             self._identity_loggers[chain] = ERC8004Logger(chain=chain)
         return self._identity_loggers[chain]
 
-    def _execute(self, request: ExecutionRequest) -> ExecutionResult:
+    def _execute(self, request: ExecutionRequest, daily_spent_usd: float = 0.0) -> ExecutionResult:
         """Run guards then execute via Byreal CLI."""
 
         # ── Guards ──────────────────────────────────────────────────────────
         wallet_balance_usd = self._wallet_balance_usd(request.chain)
-        guard_result = self.guards.check(request, wallet_balance_usd)
+        guard_result = self.guards.check(request, wallet_balance_usd, daily_spent_usd)
         if not guard_result:
             return ExecutionResult.aborted(
                 request,

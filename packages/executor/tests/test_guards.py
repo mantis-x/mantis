@@ -28,26 +28,46 @@ def make_request(**kwargs):
 
 def test_normal_request_passes_all_guards():
     runner  = GuardRunner()
-    request = make_request(amount_usd=500.0)
+    # Default amount_usd (25.0) clears the default $50 absolute trade cap —
+    # see TestAbsoluteCaps below for tests that specifically exercise caps
+    # at larger amounts via a raised MAX_TRADE_USD.
+    request = make_request(amount_usd=25.0)
     result  = runner.check(request, wallet_balance_usd=10_000.0)
     assert result.passed, f"Expected pass: {result.reason}"
 
 
 def test_position_cap_blocks_oversized_trade():
     runner  = GuardRunner()
-    # 5% of 10K = $500 max. Request $600 — should fail.
+    # 5% of 10K = $500 max. Request $600 — should fail at position_cap
+    # (which runs before the absolute trade cap, so that's the guard that
+    # actually fires here regardless of MAX_TRADE_USD's default).
     request = make_request(amount_usd=600.0, max_position=5.0)
     result  = runner.check(request, wallet_balance_usd=10_000.0)
     assert not result.passed
     assert result.guard == "position_cap"
 
 
-def test_position_cap_allows_at_exact_limit():
-    runner  = GuardRunner()
-    # 5% of 10K = $500 exactly — should pass.
+def test_position_cap_allows_at_exact_limit(monkeypatch):
+    """
+    5% of 10K = $500 exactly — should clear position_cap. Raises
+    MAX_TRADE_USD for this test specifically since $500 is deliberately
+    larger than the (unrelated) default absolute trade cap and this test's
+    only concern is position_cap's own boundary behavior.
+    """
+    monkeypatch.setenv("MAX_TRADE_USD", "100000")
+    monkeypatch.setenv("MAX_DAILY_TRADE_USD", "100000")
+    import importlib
+    from src.guards import guard_runner as guard_runner_module
+    importlib.reload(guard_runner_module)
+
+    runner  = guard_runner_module.GuardRunner()
     request = make_request(amount_usd=500.0, max_position=5.0)
     result  = runner.check(request, wallet_balance_usd=10_000.0)
-    assert result.passed
+    assert result.passed, f"Expected pass: {result.reason}"
+
+    monkeypatch.delenv("MAX_TRADE_USD", raising=False)
+    monkeypatch.delenv("MAX_DAILY_TRADE_USD", raising=False)
+    importlib.reload(guard_runner_module)
 
 
 def test_slippage_guard_blocks_high_slippage():
@@ -111,6 +131,57 @@ def test_wallet_balance_usd_is_required_argument():
     import inspect
     sig = inspect.signature(GuardRunner.check)
     assert sig.parameters["wallet_balance_usd"].default is inspect.Parameter.empty
+
+
+class TestAbsoluteCaps:
+    """
+    Hard USD ceilings independent of wallet size — protect against a
+    wallet-balance bug or an unexpectedly large wallet making the
+    percentage-based position_cap permissive in a way nobody intended.
+    """
+
+    def test_trade_cap_blocks_even_within_position_pct(self):
+        # $600 is well within 5% of a $1M wallet ($50K) and clears every
+        # other guard, but still exceeds the default $50 absolute cap.
+        runner  = GuardRunner()
+        request = make_request(amount_usd=600.0, max_position=5.0)
+        result  = runner.check(request, wallet_balance_usd=1_000_000.0)
+        assert not result.passed
+        assert result.guard == "absolute_trade_cap"
+
+    def test_trade_cap_allows_small_trade(self):
+        runner  = GuardRunner()
+        request = make_request(amount_usd=10.0, max_position=5.0)
+        result  = runner.check(request, wallet_balance_usd=1_000_000.0)
+        assert result.passed, f"Expected pass: {result.reason}"
+
+    def test_trade_cap_allows_at_exact_limit(self):
+        from src.guards.guard_runner import MAX_TRADE_USD
+        runner  = GuardRunner()
+        request = make_request(amount_usd=MAX_TRADE_USD, max_position=5.0)
+        result  = runner.check(request, wallet_balance_usd=1_000_000.0)
+        assert result.passed, f"Expected pass: {result.reason}"
+
+    def test_daily_cap_blocks_when_cumulative_would_exceed(self):
+        # $190 already spent today + a $20 trade would hit $210 > $200 default.
+        runner  = GuardRunner()
+        request = make_request(amount_usd=20.0, max_position=5.0)
+        result  = runner.check(request, wallet_balance_usd=1_000_000.0, daily_spent_usd=190.0)
+        assert not result.passed
+        assert result.guard == "absolute_daily_cap"
+
+    def test_daily_cap_allows_when_within_budget(self):
+        runner  = GuardRunner()
+        request = make_request(amount_usd=20.0, max_position=5.0)
+        result  = runner.check(request, wallet_balance_usd=1_000_000.0, daily_spent_usd=100.0)
+        assert result.passed, f"Expected pass: {result.reason}"
+
+    def test_daily_cap_defaults_to_zero_spent(self):
+        """Callers that don't pass daily_spent_usd get the pre-existing behavior."""
+        runner  = GuardRunner()
+        request = make_request(amount_usd=20.0, max_position=5.0)
+        result  = runner.check(request, wallet_balance_usd=1_000_000.0)
+        assert result.passed, f"Expected pass: {result.reason}"
 
 
 if __name__ == "__main__":

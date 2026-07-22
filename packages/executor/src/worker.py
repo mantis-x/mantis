@@ -34,6 +34,10 @@ logging.basicConfig(
 log = logging.getLogger("mantis.executor")
 
 from src.executor import Executor
+from src.safety import (
+    is_kill_switch_active, is_duplicate_signal,
+    get_daily_spent_usd, record_execution_spend,
+)
 
 
 async def main() -> None:
@@ -58,12 +62,28 @@ async def main() -> None:
     r = aioredis.from_url(redis_url, decode_responses=True)
 
     log.info("Listening on Redis mantis:signals:exec ...")
+    log.info("Kill switch: SET mantis:execution:kill_switch to halt instantly (no redeploy)")
 
     processed = 0
     executed  = 0
+    killed_logged = False
 
     while True:
         try:
+            # Kill switch is checked BEFORE popping anything off the queue,
+            # so an active kill switch leaves signals queued untouched
+            # rather than dropping them — "halt", not "discard".
+            if await is_kill_switch_active(r):
+                if not killed_logged:
+                    log.warning(
+                        "🛑 Execution kill switch ACTIVE — halting, signals "
+                        "will queue untouched until mantis:execution:kill_switch is cleared"
+                    )
+                    killed_logged = True
+                await asyncio.sleep(5)
+                continue
+            killed_logged = False
+
             # Atomic blocking pop — the returned item is guaranteed to be
             # removed by this call, so there's no separate peek-then-delete
             # step that could race with a concurrent push.
@@ -73,13 +93,27 @@ async def main() -> None:
 
             _, raw = item
             signal = json.loads(raw)
+
+            # Idempotency guard: skip a signal that's already been claimed
+            # for execution (a replay, a manual Redis restore, a duplicate
+            # push) rather than risk double-submitting a trade.
+            if await is_duplicate_signal(r, signal):
+                log.warning(
+                    "Duplicate signal on exec queue, skipping — chain=%s protocol=%s",
+                    signal.get("chain"), signal.get("protocol"),
+                )
+                continue
+
             processed += 1
 
-            results = executor.process_signal(signal)
+            daily_spent_usd = await get_daily_spent_usd(r)
+            results = executor.process_signal(signal, daily_spent_usd=daily_spent_usd)
 
             for result in results:
                 if result.success:
                     executed += 1
+                    if result.amount_usd:
+                        await record_execution_spend(r, result.amount_usd)
                     log.info(
                         "🚀 Executed: agent=%d tx=%s amount=$%.0f",
                         result.agent_id,
