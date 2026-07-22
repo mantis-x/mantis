@@ -29,7 +29,22 @@ log = logging.getLogger(__name__)
 SWAP_TOPIC  = "0x19b47279256b2a23a1665c810c8d55a1758940ee09377d4f8d26497a3577dc83"
 
 # Canonical Uniswap V3 Swap: keccak256("Swap(address,address,int256,int256,uint160,uint128,int24)")
-UNIV3_SWAP_TOPIC = "0xc42079f94fa31298d6da5b7c9a54f2a7af6e8b8cf43f49c74b49cd897f14c4d9"
+# CORRECTED 2026-07-23 — the previous value here (...4fa31298d6da5b7c9a54f2a7af6e8b8cf43f49c74b49cd897f14c4d9)
+# was NOT the real keccak256 of this signature. Confirmed against a live
+# Ethereum log's actual topic0 (found while exercising scripts/verify_pool.py
+# against a real active pool) and independently against eth_utils.keccak of
+# the signature string itself — both agree on the value below, which the old
+# constant did not match. Since evm_rpc.py's get_logs filters only by
+# `address` (never `topics` — ALL_TOPICS there is unused dead code), every
+# real Swap log on Arbitrum/Ethereum WAS fetched from the RPC, but silently
+# failed every branch in normalise()'s topic0 dispatch and was dropped with
+# zero logging (the routing `if/elif` chain falls through to `return None`
+# with nothing to catch it — not even the generic except-Exception path,
+# since no exception was ever raised). Real Uniswap V3 swaps on Arbitrum and
+# Ethereum have likely never been decoded since this constant was introduced;
+# only Mint/Burn (matched via the correct MINT_TOPIC/BURN_TOPIC below) and
+# Agni's Mantle-specific swap variant were ever getting through.
+UNIV3_SWAP_TOPIC = "0xc42079f94a6350d7e6235f29174924f928cc2ac818eb64fed8004e115fbcca67"
 
 # V3 LP events — same signature across all V3 forks (Agni, Uniswap V3, etc.)
 MINT_TOPIC  = "0x7a53080ba414158be7ec69b987b5fb7d07dee101fe85488f0853ae16239d0bde"
@@ -372,7 +387,37 @@ class EventNormaliser:
         self, log_: dict, pool_meta: PoolMeta, pool: str,
         ts: int, prices: dict, chain: str = "mantle",
     ) -> Optional[NormalisedEvent]:
+        """
+        LBPair Swap(address indexed sender, address indexed to, uint24 id,
+        bytes32 amountsIn, bytes32 amountsOut, uint24 volatilityAccumulator,
+        bytes32 totalFees, bytes32 protocolFees) — confirmed by matching
+        LB_SWAP_TOPIC's keccak256 against this exact signature, not assumed.
+
+        amountsIn/amountsOut each pack two uint128s via TraderJoe's
+        PackedUint128Math: low 128 bits = tokenX amount, high 128 bits =
+        tokenY amount. Exactly one side is nonzero in amountsIn and the
+        opposite side in amountsOut for any single-direction swap, so
+        summing in+out per token gives the swap's magnitude in each leg —
+        the same (amount0, amount1) shape _estimate_usd() already expects
+        from the Uniswap V3 decoders. pool_meta.token0/token1 must be tokenX/
+        tokenY respectively (verified via the pool's own getTokenX()/
+        getTokenY(), same as chains.py's pool_registry comment notes).
+        """
+        from eth_abi import decode
         from src.models.raw_event import EventType, Protocol
+
+        data = _log_data(log_)
+        decoded = decode(
+            ["uint24", "bytes32", "bytes32", "uint24", "bytes32", "bytes32"],
+            data,
+        )
+        amounts_in, amounts_out = decoded[1], decoded[2]
+
+        x_in,  y_in  = _unpack_uint128_pair(amounts_in)
+        x_out, y_out = _unpack_uint128_pair(amounts_out)
+        amount0 = x_in + x_out   # tokenX magnitude (one side is always 0)
+        amount1 = y_in + y_out   # tokenY magnitude
+        amount_usd = _estimate_usd(amount0, amount1, pool_meta, prices)
 
         topics = log_.get("topics", [])
         sender = "0x" + (topics[1].hex() if isinstance(topics[1], bytes) else topics[1])[-40:]
@@ -386,7 +431,9 @@ class EventNormaliser:
             pool_address   = pool,
             wallet_address = sender,
             event_type     = EventType.SWAP,
-            amount_usd     = 0.0,   # enriched by price oracle later
+            amount_usd     = amount_usd,
+            amount_in      = int(x_in + y_in),
+            amount_out     = int(x_out + y_out),
             timestamp      = _ts(ts),
         )
 
@@ -445,6 +492,20 @@ class EventNormaliser:
             amount_in      = int(value),
             timestamp      = _ts(ts),
         )
+
+
+# ── Liquidity Book packed-amount decoding ──────────────────────────────────────
+
+def _unpack_uint128_pair(packed: bytes) -> tuple[int, int]:
+    """
+    Unpack a TraderJoe PackedUint128Math bytes32: low 128 bits (first
+    value), high 128 bits (second value). Used for LBPair's amountsIn/
+    amountsOut, where the pair is (tokenX amount, tokenY amount).
+    """
+    value = int.from_bytes(packed, byteorder="big")
+    low  = value & ((1 << 128) - 1)
+    high = value >> 128
+    return low, high
 
 
 # ── USD estimation ─────────────────────────────────────────────────────────────

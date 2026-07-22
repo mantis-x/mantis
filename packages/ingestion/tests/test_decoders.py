@@ -72,6 +72,30 @@ def _univ3_swap_data(amount0: int, amount1: int) -> str:
     return _hex(data)
 
 
+def _pack_uint128_pair(low: int, high: int) -> bytes:
+    """Inverse of _unpack_uint128_pair: pack (tokenX, tokenY) into one bytes32."""
+    return ((high << 128) | low).to_bytes(32, "big")
+
+
+def _lb_swap_data(
+    id_: int, x_in: int, y_in: int, x_out: int, y_out: int,
+) -> str:
+    """
+    LBPair Swap data: (uint24 id, bytes32 amountsIn, bytes32 amountsOut,
+    uint24 volatilityAccumulator, bytes32 totalFees, bytes32 protocolFees).
+    Only one of (x_in, y_in) and the opposite of (x_out, y_out) should be
+    nonzero for a real single-direction swap, matching production shape.
+    """
+    from eth_abi import encode
+    amounts_in  = _pack_uint128_pair(x_in, y_in)
+    amounts_out = _pack_uint128_pair(x_out, y_out)
+    data = encode(
+        ["uint24", "bytes32", "bytes32", "uint24", "bytes32", "bytes32"],
+        [id_, amounts_in, amounts_out, 0, b"\x00" * 32, b"\x00" * 32],
+    )
+    return _hex(data)
+
+
 def _mint_data(amount0: int, amount1: int) -> str:
     from eth_abi import encode
     data = encode(["address", "uint128", "uint256", "uint256"],
@@ -102,12 +126,74 @@ def _make_log(topic0: str, data: str, address: str,
     }
 
 
+# ── Topic hash regression guard ───────────────────────────────────────────────
+# Every decode/routing test below constructs its own logs using the SAME
+# imported topic constant it then checks against — so none of them could ever
+# catch a wrong constant (a bug would be self-consistent). Found 2026-07-23:
+# UNIV3_SWAP_TOPIC was NOT actually keccak256("Swap(address,address,int256,
+# int256,uint160,uint128,int24)") — confirmed against a real Ethereum log's
+# topic0 while exercising scripts/verify_pool.py. Since evm_rpc.py's get_logs
+# only filters by address (not topics), every real Uniswap V3 swap on
+# Arbitrum/Ethereum was fetched but then silently failed every branch in
+# normalise()'s dispatch and was dropped with zero logging. This class checks
+# every topic constant against an independent keccak256 computation of its
+# documented signature string, so a wrong constant fails loudly instead of
+# only being self-consistent with the tests that use it.
+class TestTopicHashesMatchSignatures:
+    def _assert_matches(self, constant: str, signature: str):
+        from eth_utils import keccak
+        expected = "0x" + keccak(text=signature).hex()
+        assert constant == expected, f"{signature} should hash to {expected}, got {constant}"
+
+    def test_agni_swap_topic(self):
+        self._assert_matches(
+            SWAP_TOPIC,
+            "Swap(address,address,int256,int256,uint160,uint128,int24,uint128,uint128)",
+        )
+
+    def test_univ3_swap_topic(self):
+        self._assert_matches(
+            UNIV3_SWAP_TOPIC,
+            "Swap(address,address,int256,int256,uint160,uint128,int24)",
+        )
+
+    def test_mint_topic(self):
+        self._assert_matches(
+            MINT_TOPIC,
+            "Mint(address,address,int24,int24,uint128,uint256,uint256)",
+        )
+
+    def test_burn_topic(self):
+        self._assert_matches(
+            BURN_TOPIC,
+            "Burn(address,int24,int24,uint128,uint256,uint256)",
+        )
+
+    def test_lb_swap_topic(self):
+        self._assert_matches(
+            LB_SWAP_TOPIC,
+            "Swap(address,address,uint24,bytes32,bytes32,uint24,bytes32,bytes32)",
+        )
+
+    def test_transfer_topic(self):
+        self._assert_matches(TRANSFER_TOPIC, "Transfer(address,address,uint256)")
+
+
 SENDER = _addr_topic("0xdeadbeef" + "0" * 32)
 POOL_MANTLE   = "0xcda86a272531e8640cd7f1a92c01839911b90bb0"
 POOL_ARBITRUM = "0xc6962004f452be9203591991d15f6b388e09e8d0"
+POOL_LB       = "0x1606c79be3ebd70d8d40bac6287e23005cfbefa2"  # Merchant Moe WMNT/WETH 10bp
 
 _WETH  = TokenMeta("0x82af49447d8a07e3bd95bd0d56f35241523fbab1", "eth",  18)
 _USDCe = TokenMeta("0xff970a61a04b1ca14834a43f5de4533ebddb5cc8", "usdc",  6)
+# LBPair's tokenX/tokenY — matches chains.py's real Merchant Moe pool, where
+# token0=WMNT is tokenX (low 128 bits) and token1=WETH is tokenY (high bits).
+_WMNT_X = TokenMeta("0x78c1b0c915c4faa5fffa6cabf0219da63d7f4cb8", "mnt",  18)
+_WETH_Y = TokenMeta("0xdeaddeaddeaddeaddeaddeaddeaddeaddead1111", "weth", 18)
+
+LB_REGISTRY = {
+    POOL_LB: PoolMeta("merchant_moe", token0=_WMNT_X, token1=_WETH_Y),
+}
 
 MANTLE_PRICES   = {"mnt": 0.72, "weth": 2400.0, "usdt": 1.0, "usdc": 1.0}
 ARBITRUM_PRICES = {"eth": 2400.0, "usdc": 1.0, "usdt": 1.0, "wbtc": 65000.0}
@@ -302,6 +388,59 @@ class TestMintBurnDecode:
         assert event is not None
         assert event.event_type == EventType.MINT
         assert abs(event.amount_usd - 2400.0) < 1.0  # max(2400, 2400)
+
+
+# ── LB (Liquidity Book) swap decoding ──────────────────────────────────────────
+# Regression coverage for a real bug: _decode_lb_swap() used to hardcode
+# amount_usd=0.0 and never touch amountsIn/amountsOut at all — every
+# Merchant Moe/Trader Joe swap ingested as a real event with a fabricated
+# $0 value. These tests build genuine PackedUint128Math-encoded data (as
+# eth_getLogs actually returns) so that gap can't regress silently.
+
+class TestLBSwapDecode:
+    def test_x_to_y_swap_decodes_nonzero_usd(self):
+        # 100 WMNT in (tokenX), 0.05 WETH out (tokenY) — swap direction X->Y
+        norm = EventNormaliser(LB_REGISTRY)
+        data = _lb_swap_data(id_=1, x_in=100 * 10**18, y_in=0, x_out=0, y_out=int(0.05 * 10**18))
+        log = _make_log(LB_SWAP_TOPIC, data, POOL_LB, topic1=SENDER, topic2=SENDER)
+        event = norm.normalise(log, 0, MANTLE_PRICES, chain="mantle")
+        assert event is not None
+        assert event.event_type == EventType.SWAP
+        # max(100*0.72, 0.05*2400) = max(72, 120) = 120
+        assert abs(event.amount_usd - 120.0) < 1.0
+
+    def test_y_to_x_swap_decodes_nonzero_usd(self):
+        # 0.1 WETH in (tokenY), 138 WMNT out (tokenX) — swap direction Y->X
+        norm = EventNormaliser(LB_REGISTRY)
+        data = _lb_swap_data(id_=1, x_in=0, y_in=int(0.1 * 10**18), x_out=138 * 10**18, y_out=0)
+        log = _make_log(LB_SWAP_TOPIC, data, POOL_LB, topic1=SENDER, topic2=SENDER)
+        event = norm.normalise(log, 0, MANTLE_PRICES, chain="mantle")
+        assert event is not None
+        # max(138*0.72, 0.1*2400) = max(99.36, 240) = 240
+        assert abs(event.amount_usd - 240.0) < 1.0
+
+    def test_wallet_from_topic1(self):
+        norm = EventNormaliser(LB_REGISTRY)
+        data = _lb_swap_data(id_=1, x_in=10**18, y_in=0, x_out=0, y_out=10**15)
+        log = _make_log(LB_SWAP_TOPIC, data, POOL_LB, topic1=SENDER, topic2=SENDER)
+        event = norm.normalise(log, 0, MANTLE_PRICES, chain="mantle")
+        assert event.wallet_address == "0x" + SENDER[-40:]
+
+    def test_amount_in_out_are_sum_of_both_legs(self):
+        norm = EventNormaliser(LB_REGISTRY)
+        data = _lb_swap_data(id_=1, x_in=10**18, y_in=0, x_out=0, y_out=5 * 10**14)
+        log = _make_log(LB_SWAP_TOPIC, data, POOL_LB, topic1=SENDER, topic2=SENDER)
+        event = norm.normalise(log, 0, MANTLE_PRICES, chain="mantle")
+        assert event.amount_in == 10**18
+        assert event.amount_out == 5 * 10**14
+
+    def test_zero_amounts_give_zero_usd(self):
+        norm = EventNormaliser(LB_REGISTRY)
+        data = _lb_swap_data(id_=1, x_in=0, y_in=0, x_out=0, y_out=0)
+        log = _make_log(LB_SWAP_TOPIC, data, POOL_LB, topic1=SENDER, topic2=SENDER)
+        event = norm.normalise(log, 0, MANTLE_PRICES, chain="mantle")
+        assert event is not None
+        assert event.amount_usd == 0.0
 
 
 # ── GMX data builders ────────────────────────────────────────────────────────
@@ -666,6 +805,15 @@ class TestHexBytesRealWorldShape:
         event = norm.normalise(log, 0, ARBITRUM_PRICES, chain="arbitrum")
         assert event is not None
         assert event.event_type == EventType.SWAP
+
+    def test_lb_swap_decodes_with_hexbytes_data(self):
+        norm = EventNormaliser(LB_REGISTRY)
+        data = _lb_swap_data(id_=1, x_in=100 * 10**18, y_in=0, x_out=0, y_out=int(0.05 * 10**18))
+        log = self._hexbytes_log(LB_SWAP_TOPIC, data, POOL_LB, topic1=SENDER, topic2=SENDER)
+        event = norm.normalise(log, 0, MANTLE_PRICES, chain="mantle")
+        assert event is not None
+        assert event.event_type == EventType.SWAP
+        assert event.amount_usd > 0
 
     def test_agni_swap_decodes_with_hexbytes_data(self):
         norm = EventNormaliser(MANTLE_REGISTRY)
