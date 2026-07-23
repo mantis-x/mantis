@@ -12,10 +12,12 @@ Commands:
 """
 from __future__ import annotations
 
+import io
 import logging
 import os
 import re
 
+import qrcode
 from telegram import Update
 from telegram.ext import ContextTypes
 
@@ -42,6 +44,16 @@ PRO_TIER_PRICE_USDC        = float(os.getenv("PRO_TIER_PRICE_USDC", "29"))  # 1-
 PRO_TIER_DISCOUNT_6MO_PCT  = float(os.getenv("PRO_TIER_DISCOUNT_6MO_PCT", "5"))
 PRO_TIER_DISCOUNT_12MO_PCT = float(os.getenv("PRO_TIER_DISCOUNT_12MO_PCT", "10"))
 _EVM_ADDRESS_RE = re.compile(r"^0x[0-9a-fA-F]{40}$")
+
+
+def _qr_png_bytes(data: str) -> io.BytesIO:
+    """PNG-encode a QR code for `data` (e.g. a receiving address) as an
+    in-memory file-like object, ready for Telegram's reply_photo."""
+    img = qrcode.make(data)
+    buf = io.BytesIO()
+    img.save(buf, format="PNG")
+    buf.seek(0)
+    return buf
 
 
 def _pro_tier_price_table() -> str:
@@ -261,14 +273,20 @@ def register_handlers(app, sub_manager: SubscriptionManager, stats: dict, redis_
                 "Then run /upgrade again to see payment details."
             )
             return
-        await update.message.reply_html(
+        caption = (
             f"💎 <b>Mantis Scout Pro</b>\n\n"
             f"{_pro_tier_price_table()}\n\n"
             f"Send the amount for whichever period you want (native USDC, Arbitrum One) "
             f"from your registered wallet <code>{sub.registered_wallet}</code> to:\n\n"
             f"<code>{PRO_TIER_RECEIVE_ADDRESS}</code>\n\n"
             "Pro is credited automatically within a few minutes of confirmation — "
-            "no need to message anyone. Unlimited alerts + Execute agent access once active."
+            "no need to message anyone. Unlimited alerts + Execute agent access once active.\n\n"
+            "⚠️ QR encodes the address only — select USDC and enter the amount yourself in your wallet app."
+        )
+        await update.message.reply_photo(
+            photo=_qr_png_bytes(PRO_TIER_RECEIVE_ADDRESS),
+            caption=caption,
+            parse_mode="HTML",
         )
 
     app.add_handler(CommandHandler("start",       start))
