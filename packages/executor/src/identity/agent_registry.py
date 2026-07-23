@@ -95,7 +95,7 @@ class AgentRegistry:
                 "protocols":      ["agni_finance", "merchant_moe"],
                 "min_z_score":    3.0,
                 "action":         "swap",
-                "amount_usd":     100.0,
+                "amount_usd":     50.0,
                 "max_slippage":   0.02,
                 "max_position_pct": 5.0,
                 "description": (

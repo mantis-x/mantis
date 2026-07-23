@@ -82,7 +82,18 @@ was the most exercised during build-out.
 
 - [ ] **Start in shadow/paper on live rails** — run the real executor against
       real quotes with $0 or a $1 cap first, comparing intended vs simulated
-      fills for N days before any nonzero size.
+      fills for N days before any nonzero size. **One-time manual pipeline
+      validation done 2026-07-23** (not the full agreed-period run this item
+      still requires): pushed one hand-crafted signal onto production
+      `mantis:signals:exec`, confirmed the real executor consumed it, matched
+      it via `rule_engine`, and the `guard_runner` absolute-trade-cap check
+      correctly aborted it — `BYREAL_DRY_RUN=true` throughout, nothing reached
+      chain. This run caught a real misconfiguration, fixed same day: the only
+      registered agent's rule requested a $100 trade while `MAX_TRADE_USD`
+      defaults to $50, meaning that agent could never have executed anything
+      once live. Fixed by lowering the agent's `amount_usd` to $50 (both the
+      `agent_registry.py` seed default and the already-seeded production DB
+      row, via a direct `UPDATE agents ... rules->amount_usd`).
 - [ ] **Alerting on every execution + every guard abort** — reuse the enrichment
       alerter pattern; an admin push on any live trade and any failure.
 - [ ] **Per-execution on-chain audit confirmed** — `erc8004_logger` decision log
@@ -133,7 +144,9 @@ holder; they gate live trading regardless of code readiness:
        — verified functionally against a real Redis instance.
 4. [ ] Key custody moved off plaintext env; hot-wallet float capped.
 5. [ ] Security review of the execution path completed and signed off.
-6. [ ] Shadow/paper run on live rails clean for an agreed period.
+6. [ ] Shadow/paper run on live rails clean for an agreed period. One-time
+       manual pipeline validation done 2026-07-23 (see §4) — this item is
+       about a sustained clean period, not satisfied by a single pass.
 7. [ ] Execution alerting + monitoring live.
 8. [ ] Legal/business gate (§6) cleared by the account holder.
 9. [ ] Paid execution RPC configured.
