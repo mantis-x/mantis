@@ -134,7 +134,7 @@ def format_signal_card(signal: dict, audit_tx_hash: Optional[str] = None) -> str
 
     lines.append("")
     lines.append("⚠️ <i>Not financial advice. DYOR.</i>")
-    lines.append("<i>Mantis Scout · mantis-x/mantis</i>")
+    lines.append("<i>Mantis Scout</i>")
 
     return "\n".join(lines)
 
@@ -194,7 +194,7 @@ def format_signal_card_markdown(signal: dict, audit_tx_hash: Optional[str] = Non
 
     lines.append("")
     lines.append("⚠️ _Not financial advice. DYOR._")
-    lines.append("_Mantis Scout · mantis-x/mantis_")
+    lines.append("_Mantis Scout_")
 
     return "\n".join(lines)
 
@@ -254,7 +254,7 @@ def format_signal_card_plain(signal: dict, audit_tx_hash: Optional[str] = None) 
 
     lines.append("")
     lines.append("Not financial advice. DYOR.")
-    lines.append("Mantis Scout · mantis-x/mantis")
+    lines.append("Mantis Scout")
 
     return "\n".join(lines)
 

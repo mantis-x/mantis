@@ -62,9 +62,7 @@ HELP_MSG = """**Mantis Scout — Commands**
   `!subscribe ethereum`  → Ethereum only
 
 **Free tier:** 3 alerts/day
-**Pro tier:** Unlimited alerts + Execute agent
-
-github.com/mantis-x/mantis"""
+**Pro tier:** Unlimited alerts + Execute agent"""
 
 def _parse_chain_arg(arg: str) -> tuple:
     """Returns (chains_set_or_None, display_text, error_or_None)."""

@@ -103,9 +103,7 @@ HELP_MSG = """🦟 <b>Mantis Scout — Commands</b>
   /subscribe ethereum  → Ethereum only
 
 <b>Free tier:</b> 3 alerts/day
-<b>Pro tier:</b> Unlimited alerts + Execute agent
-
-<i>github.com/mantis-x/mantis</i>"""
+<b>Pro tier:</b> Unlimited alerts + Execute agent"""
 
 
 def _parse_chain_arg(args: list[str]) -> tuple[str | None, str]:
