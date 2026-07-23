@@ -26,3 +26,5 @@ anthropic>=0.40.0
 
 # Delivery
 python-telegram-bot==21.3
+qrcode==7.4.2
+pillow==10.4.0
