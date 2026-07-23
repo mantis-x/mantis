@@ -114,7 +114,7 @@ async def handle_text(text: str, user_id: str, sub_manager: SubscriptionManager,
         return 'You weren\'t subscribed. Send "subscribe" to start.'
 
     if command == "status":
-        stats["line_subscribers"] = sub_manager.subscriber_count()
+        stats["subscribers"] = sub_manager.subscriber_count()
         live_candidates = await get_live_candidates(redis_url)
         if live_candidates is not None:
             stats["candidates"] = live_candidates

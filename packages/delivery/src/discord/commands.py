@@ -113,7 +113,7 @@ def register_handlers(bot, sub_manager: SubscriptionManager, stats: dict, redis_
 
     @bot.command(name="status")
     async def status(ctx) -> None:
-        stats["discord_subscribers"] = sub_manager.subscriber_count()
+        stats["subscribers"] = sub_manager.subscriber_count()
         live_candidates = await get_live_candidates(redis_url)
         if live_candidates is not None:
             stats["candidates"] = live_candidates
