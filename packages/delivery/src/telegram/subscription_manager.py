@@ -51,6 +51,9 @@ class SubscriptionManager:
     def record_delivery(self, chat_id: int) -> None:
         self._store.record_delivery(str(chat_id))
 
+    def register_wallet(self, chat_id: int, wallet_address: str) -> bool:
+        return self._store.register_wallet(str(chat_id), wallet_address)
+
     def add_to_history(self, signal: dict) -> None:
         self._store.add_to_history(signal)
 
@@ -74,6 +77,8 @@ class SubscriptionManager:
             protocols=common_sub.protocols,
             chains=common_sub.chains,
             is_pro=common_sub.is_pro,
+            pro_expires_at=common_sub.pro_expires_at,
+            registered_wallet=common_sub.registered_wallet,
             joined_at=common_sub.joined_at,
             alerts_today=common_sub.alerts_today,
             last_alert_date=common_sub.last_alert_date,

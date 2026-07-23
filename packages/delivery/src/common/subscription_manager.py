@@ -35,6 +35,8 @@ class Subscription:
     protocols:      Optional[set] = None
     chains:         Optional[set] = None
     is_pro:         bool = False
+    pro_expires_at:    Optional[datetime] = None
+    registered_wallet: Optional[str] = None
     joined_at:      datetime = field(default_factory=lambda: datetime.now(tz=timezone.utc))
     alerts_today:    int = 0
     last_alert_date: Optional[date] = None
@@ -48,6 +50,8 @@ class Subscription:
             protocols       = set(row.protocols) if row.protocols else None,
             chains          = set(row.chains) if row.chains else None,
             is_pro          = row.is_pro,
+            pro_expires_at    = row.pro_expires_at,
+            registered_wallet = row.registered_wallet,
             joined_at       = row.joined_at,
             alerts_today    = row.alerts_today,
             last_alert_date = row.last_alert_date,
@@ -129,6 +133,19 @@ class SubscriptionManager:
             if signal.get("id") == signal_id:
                 return signal
         return None
+
+    def register_wallet(self, recipient_id: str, wallet_address: str) -> bool:
+        """Record the wallet a subscriber will pay Pro tier from, so the
+        payment watcher (packages/shared/src/billing/pro_payment_watcher.py)
+        can match an incoming USDC transfer to this recipient. Returns False
+        if not subscribed."""
+        with get_session() as session:
+            row = self._get_row(session, recipient_id)
+            if row is None:
+                return False
+            row.registered_wallet = wallet_address.lower()
+            log.info("Wallet registered: channel=%s id=%s wallet=%s", self.channel, recipient_id, wallet_address)
+            return True
 
     def subscriber_count(self) -> int:
         with get_session() as session:

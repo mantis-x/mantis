@@ -13,6 +13,8 @@ Commands:
 from __future__ import annotations
 
 import logging
+import os
+import re
 
 from telegram import Update
 from telegram.ext import ContextTypes
@@ -29,6 +31,27 @@ log = logging.getLogger(__name__)
 
 SUPPORTED_CHAINS = {"mantle", "arbitrum", "hashkey", "ethereum"}
 _CHAIN_LABEL = {"mantle": "Mantle", "arbitrum": "Arbitrum", "hashkey": "HashKey Chain", "ethereum": "Ethereum"}
+
+# Pro tier billing — same env vars/defaults as
+# packages/shared/src/billing/pro_payment_watcher.py (this package doesn't
+# import from shared; see packages/delivery/src/db/models/subscription.py's
+# own docstring for why it's a synced copy, not a shared import).
+PRO_TIER_PAYMENTS_ENABLED  = os.getenv("PRO_TIER_PAYMENTS_ENABLED", "false").lower() == "true"
+PRO_TIER_RECEIVE_ADDRESS   = os.getenv("PRO_TIER_RECEIVE_ADDRESS", "")
+PRO_TIER_PRICE_USDC        = float(os.getenv("PRO_TIER_PRICE_USDC", "29"))  # 1-month price
+PRO_TIER_DISCOUNT_6MO_PCT  = float(os.getenv("PRO_TIER_DISCOUNT_6MO_PCT", "5"))
+PRO_TIER_DISCOUNT_12MO_PCT = float(os.getenv("PRO_TIER_DISCOUNT_12MO_PCT", "10"))
+_EVM_ADDRESS_RE = re.compile(r"^0x[0-9a-fA-F]{40}$")
+
+
+def _pro_tier_price_table() -> str:
+    six_mo  = PRO_TIER_PRICE_USDC * 6 * (1 - PRO_TIER_DISCOUNT_6MO_PCT / 100)
+    twelve_mo = PRO_TIER_PRICE_USDC * 12 * (1 - PRO_TIER_DISCOUNT_12MO_PCT / 100)
+    return (
+        f"  1 month:  {PRO_TIER_PRICE_USDC:g} USDC\n"
+        f"  6 months: {six_mo:g} USDC  ({PRO_TIER_DISCOUNT_6MO_PCT:g}% off)\n"
+        f"  12 months: {twelve_mo:g} USDC  ({PRO_TIER_DISCOUNT_12MO_PCT:g}% off)"
+    )
 
 WELCOME_MSG = """🦟 <b>Welcome to Mantis Scout</b>
 
@@ -56,6 +79,8 @@ HELP_MSG = """🦟 <b>Mantis Scout — Commands</b>
 /status             Bot status and stats
 /history            Last 5 signals
 /verify &lt;id&gt;       Verify a signal on-chain
+/upgrade            Go Pro — unlimited alerts
+/register_wallet &lt;address&gt;  Link the wallet you'll pay Pro from
 /help               This message
 
 <b>Chain filters:</b>
@@ -139,7 +164,12 @@ def register_handlers(app, sub_manager: SubscriptionManager, stats: dict, redis_
         enrichment_errors = await get_enrichment_consecutive_errors(redis_url)
         if enrichment_errors is not None:
             stats["enrichment_errors"] = enrichment_errors
-        await update.message.reply_html(format_status_card(stats))
+        card = format_status_card(stats)
+        sub = sub_manager.get_subscription(update.effective_chat.id)
+        if sub and sub.is_pro:
+            expiry = f" (until {sub.pro_expires_at:%Y-%m-%d})" if sub.pro_expires_at else " (no expiry)"
+            card += f"\n\n💎 <b>Pro tier active</b>{expiry}"
+        await update.message.reply_html(card)
 
     async def history(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         signals = sub_manager.get_history(5)
@@ -197,6 +227,50 @@ def register_handlers(app, sub_manager: SubscriptionManager, stats: dict, redis_
     async def help_cmd(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         await update.message.reply_html(HELP_MSG)
 
+    async def register_wallet(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+        chat_id = update.effective_chat.id
+        args = ctx.args or []
+        if not args or not _EVM_ADDRESS_RE.match(args[0]):
+            await update.message.reply_html(
+                "Usage: /register_wallet &lt;address&gt;\n"
+                "Example: /register_wallet 0xabc...123\n\n"
+                "This is the wallet you'll send Pro-tier payment <b>from</b> on Arbitrum — "
+                "used to match your payment automatically. It never needs to sign anything for me."
+            )
+            return
+        if not sub_manager.is_subscribed(chat_id):
+            sub_manager.subscribe(chat_id)
+        sub_manager.register_wallet(chat_id, args[0])
+        await update.message.reply_html(
+            f"✅ Wallet registered: <code>{args[0]}</code>\n\nUse /upgrade to see payment details."
+        )
+
+    async def upgrade(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+        if not PRO_TIER_PAYMENTS_ENABLED or not PRO_TIER_RECEIVE_ADDRESS:
+            await update.message.reply_html(
+                "🚧 <b>Pro tier isn't live yet.</b>\n\n"
+                "The payment path is built but not switched on — hang tight, it's coming soon."
+            )
+            return
+        chat_id = update.effective_chat.id
+        sub = sub_manager.get_subscription(chat_id)
+        if sub is None or not sub.registered_wallet:
+            await update.message.reply_html(
+                "First, register the wallet you'll pay from:\n"
+                "/register_wallet &lt;address&gt;\n\n"
+                "Then run /upgrade again to see payment details."
+            )
+            return
+        await update.message.reply_html(
+            f"💎 <b>Mantis Scout Pro</b>\n\n"
+            f"{_pro_tier_price_table()}\n\n"
+            f"Send the amount for whichever period you want (native USDC, Arbitrum One) "
+            f"from your registered wallet <code>{sub.registered_wallet}</code> to:\n\n"
+            f"<code>{PRO_TIER_RECEIVE_ADDRESS}</code>\n\n"
+            "Pro is credited automatically within a few minutes of confirmation — "
+            "no need to message anyone. Unlimited alerts + Execute agent access once active."
+        )
+
     app.add_handler(CommandHandler("start",       start))
     app.add_handler(CommandHandler("subscribe",   subscribe))
     app.add_handler(CommandHandler("unsubscribe", unsubscribe))
@@ -204,5 +278,7 @@ def register_handlers(app, sub_manager: SubscriptionManager, stats: dict, redis_
     app.add_handler(CommandHandler("history",     history))
     app.add_handler(CommandHandler("verify",      verify))
     app.add_handler(CommandHandler("help",        help_cmd))
+    app.add_handler(CommandHandler("register_wallet", register_wallet))
+    app.add_handler(CommandHandler("upgrade",     upgrade))
 
-    log.info("Registered 7 command handlers")
+    log.info("Registered 9 command handlers")

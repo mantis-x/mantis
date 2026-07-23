@@ -32,6 +32,9 @@ class SubscriptionRow(Base):
     protocols:      Mapped[list | None] = mapped_column(JSONB, nullable=True)
     chains:         Mapped[list | None] = mapped_column(JSONB, nullable=True)
     is_pro:         Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    # NULL = never expires (manual/grandfathered grant); see shared model for full note.
+    pro_expires_at:    Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    registered_wallet: Mapped[str | None] = mapped_column(String, nullable=True)
 
     joined_at:       Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False,

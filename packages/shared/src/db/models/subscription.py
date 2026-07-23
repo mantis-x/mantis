@@ -36,6 +36,14 @@ class SubscriptionRow(Base):
     protocols:      Mapped[list | None] = mapped_column(JSONB, nullable=True)  # None = all protocols
     chains:         Mapped[list | None] = mapped_column(JSONB, nullable=True)  # None = all chains
     is_pro:         Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    # NULL = never expires (manual/grandfathered grant). Set on a credited
+    # on-chain payment (see ProPaymentRow); the tracking worker's expiry
+    # sweep flips is_pro back to False once this lapses — but only for rows
+    # where this is NOT NULL, so manual grants are never touched.
+    pro_expires_at:    Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    # Wallet address the subscriber registered via /register_wallet, used to
+    # match an incoming USDC payment on Arbitrum to this row. Lowercased on write.
+    registered_wallet: Mapped[str | None] = mapped_column(String, nullable=True)
 
     joined_at:       Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False,

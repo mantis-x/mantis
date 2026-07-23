@@ -31,9 +31,12 @@ log = logging.getLogger("mantis.tracking")
 
 from src.db.connection import get_session
 from src.tracking.signal_outcome_tracker import SignalOutcomeTracker
+from src.billing.pro_payment_watcher import ProPaymentWatcher, sweep_expired_pro
 
 # How often to sweep for due outcome checks, independent of signal arrival rate.
 DUE_CHECK_INTERVAL_S = int(os.getenv("TRACKING_DUE_CHECK_INTERVAL_S", "300"))
+# Pro-tier payment/expiry sweep — reuses the same due-check cadence as outcomes.
+PRO_TIER_CHECK_INTERVAL_S = int(os.getenv("PRO_TIER_CHECK_INTERVAL_S", "300"))
 
 
 async def main() -> None:
@@ -50,6 +53,7 @@ async def main() -> None:
     # async client below, which only serves the mantis:signals:tracking queue.
     wallet_redis = sync_redis.from_url(redis_url, decode_responses=True)
     tracker = SignalOutcomeTracker(redis_client=wallet_redis)
+    pro_watcher = ProPaymentWatcher(redis_client=wallet_redis)
 
     r = aioredis.from_url(redis_url, decode_responses=True)
 
@@ -57,6 +61,7 @@ async def main() -> None:
 
     processed = 0
     last_due_check = 0.0
+    last_pro_check = 0.0
 
     while True:
         try:
@@ -83,6 +88,19 @@ async def main() -> None:
                 if checked:
                     log.info("Checked %d due outcome(s)", checked)
                 last_due_check = now
+
+            if now - last_pro_check >= PRO_TIER_CHECK_INTERVAL_S:
+                with get_session() as session:
+                    credited = pro_watcher.check_new_payments(session)
+                    expired = sweep_expired_pro(session)
+                # Only advance the scan cursor once the above has actually
+                # committed — see check_new_payments' docstring for why.
+                pro_watcher.commit_cursor()
+                if credited:
+                    log.info("Pro tier: credited %d payment(s)", credited)
+                if expired:
+                    log.info("Pro tier: %d subscription(s) expired", expired)
+                last_pro_check = now
 
             if processed and processed % 20 == 0:
                 log.info("Tracking stats: signals_persisted=%d", processed)

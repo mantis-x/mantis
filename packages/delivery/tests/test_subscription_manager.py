@@ -157,6 +157,27 @@ class TestPersistenceAcrossRestarts:
         assert fresh_mgr.is_subscribed("durable-user") is True
 
 
+class TestRegisterWallet:
+    def test_register_wallet_returns_false_if_not_subscribed(self):
+        mgr = SubscriptionManager(channel="discord")
+        assert mgr.register_wallet("never-subscribed", "0xabc") is False
+
+    def test_register_wallet_persists_lowercased(self):
+        mgr = SubscriptionManager(channel="discord")
+        mgr.subscribe("wallet-user")
+        assert mgr.register_wallet("wallet-user", "0xABC123") is True
+
+        sub = mgr.get_subscription("wallet-user")
+        assert sub.registered_wallet == "0xabc123"
+
+    def test_pro_expires_at_defaults_none(self):
+        mgr = SubscriptionManager(channel="discord")
+        mgr.subscribe("fresh-user")
+        sub = mgr.get_subscription("fresh-user")
+        assert sub.pro_expires_at is None
+        assert sub.registered_wallet is None
+
+
 class TestTelegramWrapper:
     """The int-chat_id wrapper must translate correctly and share the same store."""
 
@@ -181,3 +202,10 @@ class TestTelegramWrapper:
         TelegramSubscriptionManager().subscribe(555)
         common_view = SubscriptionManager(channel="telegram")
         assert common_view.is_subscribed("555") is True
+
+    def test_register_wallet_accepts_int_chat_id(self):
+        mgr = TelegramSubscriptionManager()
+        mgr.subscribe(777)
+        assert mgr.register_wallet(777, "0xDEF456") is True
+        sub = mgr.get_subscription(777)
+        assert sub.registered_wallet == "0xdef456"
