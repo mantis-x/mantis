@@ -103,6 +103,16 @@ MULTIWALLET_COOLDOWN_MINUTES = int(os.getenv("MULTIWALLET_COOLDOWN_MINUTES", str
 # near-duplicate alerts with no suppression at all.
 SOLO_COOLDOWN_MINUTES = int(os.getenv("SOLO_SIGNAL_COOLDOWN_MINUTES", "30"))
 
+# Absolute dollar floor before a solo candidate is even emitted for
+# enrichment — found 2026-07-24: Mantle (`agni_finance`) and HashKey transfer
+# baselines are calibrated to genuinely tiny real volume (means as low as
+# $3-35/hour), so ordinary $14-60 activity clears the z-score bar and burns a
+# Claude enrichment call every time despite never once converting to a
+# delivered signal (100% discard rate observed). This is a cheap pre-filter,
+# not a baseline recalibration — it doesn't touch the multi-wallet path
+# (already gated by MULTIWALLET_MIN_USD, far above this floor).
+MIN_CANDIDATE_USD = float(os.getenv("MIN_CANDIDATE_USD", "300"))
+
 # ── Bootstrap with synthetic historical data so detector scores immediately ──
 # In production this comes from Postgres. For Week 2 we seed with realistic
 # Mantle pool volume estimates so z-scores work from the first real event.
@@ -309,7 +319,11 @@ class Detector:
         # minimum) a solo-wallet candidate — unless this same wallet already
         # fired one for this pool/event_type within SOLO_COOLDOWN_MINUTES
         # (see _should_emit_solo's docstring for why this dedup exists).
-        if scored.is_anomaly and self._should_emit_solo(scored):
+        if (
+            scored.is_anomaly
+            and scored.amount_usd >= MIN_CANDIDATE_USD
+            and self._should_emit_solo(scored)
+        ):
             await self._emit_candidate(self._clusterer._solo_cluster(scored), [scored], r)
 
         # Additionally check if this event, combined with other recent events on
