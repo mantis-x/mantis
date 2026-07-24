@@ -113,6 +113,26 @@ SOLO_COOLDOWN_MINUTES = int(os.getenv("SOLO_SIGNAL_COOLDOWN_MINUTES", "30"))
 # (already gated by MULTIWALLET_MIN_USD, far above this floor).
 MIN_CANDIDATE_USD = float(os.getenv("MIN_CANDIDATE_USD", "300"))
 
+# Per-chain solo dollar floor, layered on top of MIN_CANDIDATE_USD above —
+# same per-chain override pattern as MULTIWALLET_MIN_USD_<CHAIN>. Added
+# 2026-07-24: unlike the multi-wallet path, solo signals had NO dollar floor
+# at all, only the z-score bar — and some pools' baselines (e.g. Ethereum's
+# WBTC/WETH 0.05%, mean $80K/std $25K, detector.py:181) are low enough that a
+# single $142.5K+ swap already clears z=2.5. User observed $190K/$349K/$403K
+# solo "whale" alerts at 62%/58%-ish confidence that read as noise relative
+# to the real whale signals this project has produced ($843K, $1.4M+). No
+# global default (0 = off) — set SOLO_MIN_USD_<CHAIN> to raise a specific
+# chain's solo bar without affecting others.
+_SOLO_MIN_USD = float(os.getenv("SOLO_MIN_USD", "0"))
+_solo_min_usd_cache: dict[str, float] = {}
+
+
+def _solo_min_usd_for_chain(chain: str) -> float:
+    if chain not in _solo_min_usd_cache:
+        env_key = f"SOLO_MIN_USD_{chain.upper()}"
+        _solo_min_usd_cache[chain] = float(os.getenv(env_key, str(_SOLO_MIN_USD)))
+    return _solo_min_usd_cache[chain]
+
 # ── Bootstrap with synthetic historical data so detector scores immediately ──
 # In production this comes from Postgres. For Week 2 we seed with realistic
 # Mantle pool volume estimates so z-scores work from the first real event.
@@ -322,6 +342,7 @@ class Detector:
         if (
             scored.is_anomaly
             and scored.amount_usd >= MIN_CANDIDATE_USD
+            and scored.amount_usd >= _solo_min_usd_for_chain(scored.chain)
             and self._should_emit_solo(scored)
         ):
             await self._emit_candidate(self._clusterer._solo_cluster(scored), [scored], r)

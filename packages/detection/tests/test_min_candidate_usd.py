@@ -86,3 +86,42 @@ def test_above_floor_solo_candidate_still_emits():
     solo = _solo_candidates(fake)
     assert len(solo) == 1, f"above-floor candidate should still emit: {solo}"
     assert solo[0]["total_volume_usd"] == 500
+
+
+class TestSoloMinUsdPerChain:
+    """2026-07-24: per-chain solo dollar floor (SOLO_MIN_USD_<CHAIN>), added
+    after a $190K/62%-confidence Ethereum WBTC/WETH alert (mean $80K/std $25K
+    baseline, z=2.5 clears at just $142.5K) read as noise relative to the
+    real whale signals this project has produced ($843K, $1.4M+)."""
+
+    def test_below_chain_floor_is_suppressed(self, monkeypatch):
+        monkeypatch.setenv("SOLO_MIN_USD_SOLOTESTCHAINA", "500000")
+        import src.detector as detector_mod
+        detector_mod._solo_min_usd_cache.pop("solotestchaina", None)
+
+        detector = Detector(redis_url="")
+        _seed(detector, mean=80_000, chain="solotestchaina")
+        fake = FakeRedis()
+
+        # $190K clears the pool's own z-score bar but not the $500K chain floor.
+        asyncio.run(detector._process(
+            _event("0xwalletcccc", 190_000, 0, chain="solotestchaina"), fake
+        ))
+
+        assert not _solo_candidates(fake), "below the per-chain floor, should be suppressed"
+
+    def test_above_chain_floor_still_emits(self, monkeypatch):
+        monkeypatch.setenv("SOLO_MIN_USD_SOLOTESTCHAINB", "500000")
+        import src.detector as detector_mod
+        detector_mod._solo_min_usd_cache.pop("solotestchainb", None)
+
+        detector = Detector(redis_url="")
+        _seed(detector, mean=80_000, chain="solotestchainb")
+        fake = FakeRedis()
+
+        asyncio.run(detector._process(
+            _event("0xwalletdddd", 900_000, 0, chain="solotestchainb"), fake
+        ))
+
+        solo = _solo_candidates(fake)
+        assert len(solo) == 1, f"above the per-chain floor, should still emit: {solo}"
