@@ -32,6 +32,7 @@ log = logging.getLogger("mantis.tracking")
 from src.db.connection import get_session
 from src.tracking.signal_outcome_tracker import SignalOutcomeTracker
 from src.billing.pro_payment_watcher import ProPaymentWatcher, sweep_expired_pro
+from src.billing.api_payment_watcher import ApiPaymentWatcher
 
 # How often to sweep for due outcome checks, independent of signal arrival rate.
 DUE_CHECK_INTERVAL_S = int(os.getenv("TRACKING_DUE_CHECK_INTERVAL_S", "300"))
@@ -54,6 +55,7 @@ async def main() -> None:
     wallet_redis = sync_redis.from_url(redis_url, decode_responses=True)
     tracker = SignalOutcomeTracker(redis_client=wallet_redis)
     pro_watcher = ProPaymentWatcher(redis_client=wallet_redis)
+    api_watcher = ApiPaymentWatcher(redis_client=wallet_redis)
 
     r = aioredis.from_url(redis_url, decode_responses=True)
 
@@ -73,11 +75,24 @@ async def main() -> None:
                 with get_session() as session:
                     signal_row = tracker.persist_signal(session, signal_dict)
                     tracker.schedule_outcomes(session, signal_row)
+                    # Capture the durable-id payload while the session is open;
+                    # expire_on_commit=False keeps attributes readable after.
+                    api_payload = json.dumps(signal_row.to_dict())
+
+                # Fan out to the API-tier webhook queue AFTER persist committed —
+                # this is the only stage where the signal has its durable DB id,
+                # which the webhook dispatcher needs to (a) let customers correlate
+                # a delivery back to GET /v1/signals/{id} and (b) key idempotent
+                # delivery rows. Capped like the other fan-out queues; a webhook
+                # dispatcher that's down just misses the backlog, never blocks
+                # tracking. No-op in practice until API_TIER_ENABLED + a webhook exists.
+                await r.rpush("mantis:signals:api", api_payload)
+                await r.ltrim("mantis:signals:api", 0, 4999)
 
                 processed += 1
                 log.info(
-                    "Tracked signal: chain=%s protocol=%s type=%s conf=%d",
-                    signal_dict.get("chain"), signal_dict.get("protocol"),
+                    "Tracked signal: id=%s chain=%s protocol=%s type=%s conf=%d",
+                    signal_row.id, signal_dict.get("chain"), signal_dict.get("protocol"),
                     signal_dict.get("signal_type"), signal_dict.get("confidence", 0),
                 )
 
@@ -100,6 +115,16 @@ async def main() -> None:
                     log.info("Pro tier: credited %d payment(s)", credited)
                 if expired:
                     log.info("Pro tier: %d subscription(s) expired", expired)
+
+                # API-tier billing — same cadence, same cursor-after-commit
+                # discipline. Scans a DIFFERENT receive address than Pro, so the
+                # two never collide. No expiry sweep needed: API access is gated
+                # live on api_tier_expires_at (ApiCustomerRow.is_active()).
+                with get_session() as session:
+                    api_credited = api_watcher.check_new_payments(session)
+                api_watcher.commit_cursor()
+                if api_credited:
+                    log.info("API tier: credited %d payment(s)", api_credited)
                 last_pro_check = now
 
             if processed and processed % 20 == 0:

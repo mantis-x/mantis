@@ -54,3 +54,57 @@ class StatsOut(BaseModel):
 class HealthOut(BaseModel):
     status: str
     api_tier_enabled: bool
+
+
+# ── webhooks (Phase B) ──────────────────────────────────────────────────────
+class EventFilters(BaseModel):
+    chain: Optional[str] = None
+    signal_type: Optional[str] = None
+    min_confidence: Optional[int] = None
+
+
+class WebhookCreateIn(BaseModel):
+    url: str
+    event_filters: Optional[EventFilters] = None
+
+
+class WebhookOut(BaseModel):
+    id: int
+    url: str
+    active: bool
+    disabled: bool
+    event_filters: Optional[dict] = None
+    consecutive_failures: int
+    created_at: str
+
+
+class WebhookCreatedOut(WebhookOut):
+    # The signing secret — shown ONCE at creation, never returned again.
+    secret: str
+
+
+class WebhookTestResultOut(BaseModel):
+    delivered: bool
+    status_code: Optional[int] = None
+
+
+# ── billing (Phase C) ───────────────────────────────────────────────────────
+class WalletRegisterIn(BaseModel):
+    address: str
+
+
+class PricingTierOut(BaseModel):
+    days: int
+    months: int
+    price_usdc: float
+
+
+class BillingInfoOut(BaseModel):
+    payments_enabled: bool
+    receive_address: Optional[str] = None        # None until configured
+    currency: str = "USDC"
+    chain: str = "arbitrum"
+    tiers: list[PricingTierOut]
+    registered_wallet: Optional[str] = None
+    api_tier_expires_at: Optional[str] = None
+    active: bool

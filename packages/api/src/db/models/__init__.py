@@ -11,6 +11,8 @@ from src.db.models.signal import SignalRow
 from src.db.models.signal_outcome import SignalOutcomeRow, OutcomeStatus, HORIZONS_HOURS
 from src.db.models.api_customer import ApiCustomerRow
 from src.db.models.api_key import ApiKeyRow
+from src.db.models.webhook import WebhookRow
+from src.db.models.webhook_delivery import WebhookDeliveryRow, DeliveryStatus
 
 __all__ = [
     "Base",
@@ -20,4 +22,7 @@ __all__ = [
     "HORIZONS_HOURS",
     "ApiCustomerRow",
     "ApiKeyRow",
+    "WebhookRow",
+    "WebhookDeliveryRow",
+    "DeliveryStatus",
 ]

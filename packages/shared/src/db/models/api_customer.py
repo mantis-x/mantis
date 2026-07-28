@@ -30,6 +30,11 @@ class ApiCustomerRow(Base):
         DateTime(timezone=True), nullable=True
     )
 
+    # The Arbitrum wallet this customer pays from — the ApiPaymentWatcher matches
+    # an incoming USDC transfer's sender to this to credit the right customer.
+    # Set via POST /v1/billing/wallet. Stored lowercased.
+    registered_wallet: Mapped[str | None] = mapped_column(String, nullable=True)
+
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False,
         default=lambda: datetime.now(tz=timezone.utc),

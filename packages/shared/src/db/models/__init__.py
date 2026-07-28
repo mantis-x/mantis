@@ -8,6 +8,9 @@ from src.db.models.execution import ExecutionRow
 from src.db.models.pro_payment import ProPaymentRow
 from src.db.models.api_customer import ApiCustomerRow
 from src.db.models.api_key import ApiKeyRow
+from src.db.models.webhook import WebhookRow
+from src.db.models.webhook_delivery import WebhookDeliveryRow, DeliveryStatus
+from src.db.models.api_payment import ApiPaymentRow
 
 __all__ = [
     "Base",
@@ -21,4 +24,8 @@ __all__ = [
     "ProPaymentRow",
     "ApiCustomerRow",
     "ApiKeyRow",
+    "WebhookRow",
+    "WebhookDeliveryRow",
+    "DeliveryStatus",
+    "ApiPaymentRow",
 ]

@@ -29,7 +29,7 @@ log = logging.getLogger("mantis.api")
 from fastapi import FastAPI  # noqa: E402
 
 from src.config import PORT, api_tier_enabled  # noqa: E402
-from src.routes import health, signals  # noqa: E402
+from src.routes import billing, health, signals, webhooks  # noqa: E402
 
 
 def create_app() -> FastAPI:
@@ -43,6 +43,8 @@ def create_app() -> FastAPI:
     )
     app.include_router(health.router)
     app.include_router(signals.router)
+    app.include_router(webhooks.router)
+    app.include_router(billing.router)
     return app
 
 

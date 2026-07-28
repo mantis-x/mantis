@@ -104,18 +104,35 @@ HTTP. No billing yet (comped key) — that's the point: prove value before build
 
 ---
 
-## Phase B — Webhooks (outline; build after a pilot wants push)
-- Tables `webhooks` + `webhook_deliveries`; add a 4th enrichment fan-out `rpush mantis:signals:api`;
-  a webhook dispatcher (HMAC-signed POSTs, replay-protection timestamp, exponential-backoff retries,
-  auto-disable after N failures — reuse the `EnrichmentAlerter` streak pattern); register/list/delete/
-  test endpoints + a signature-verification sample for customers.
+## Phase B — Webhooks — BUILT & locally verified 2026-07-28 (not deployed)
+- `webhooks` + `webhook_deliveries` tables (migration `0004`). **Fan-out is from the TRACKING worker**
+  after `persist_signal` (not enrichment) — that's the only stage the signal has its durable DB id,
+  which webhooks need for `/v1/signals/{id}` correlation and the idempotent `(webhook, signal)` key.
+- `webhook_dispatcher.py` (8th supervisord worker): consumes `mantis:signals:api`, HMAC-SHA256 signs
+  (`X-Mantis-Signature`/`X-Mantis-Timestamp`, replay-guarded), **bounded-concurrency** sends with a
+  per-request timeout (no head-of-line blocking), exponential-backoff retries, consecutive-failure
+  auto-disable (streak resets on success).
+- Management endpoints `POST/GET/DELETE /v1/webhooks` + `/{id}/test` — **per-customer tenancy** (IDOR
+  404s) and **SSRF guard** (`url_guard.py`: https-only, rejects private/loopback/link-local/metadata IPs)
+  at register and test.
+- Verified: 21 Phase-B tests (signing, dispatcher state machine, delivery/idempotency/retry, endpoints
+  tenancy/SSRF) + end-to-end smoke (register → dispatch → signed delivery row). Migration `0004` round-trips.
 
-## Phase C — Self-serve billing (outline; build once value is proven)
-- API-tier price points ($299/mo + 6/12mo discounts) computed from an env base like Pro's; **product
-  distinction** (readiness §7 #2) via a separate `API_TIER_RECEIVE_ADDRESS` (recommended — reuse
-  `pro_payment_watcher` parametrised by product); on credit set `api_tier_expires_at` + activate the
-  key; expiry sweep deactivates it (mirror `sweep_expired_pro`); verify end-to-end against one real
-  on-chain payment (same discipline as PROJECT_STATE.md #35).
+## Phase C — Self-serve billing — BUILT & locally verified 2026-07-28 (not deployed)
+- `api_customers.registered_wallet` + `api_payments` table (migration `0005`).
+- `ApiPaymentWatcher` (`packages/shared/src/billing/`, wired into the tracking worker's periodic loop
+  next to the Pro watcher) — mirrors the Pro watcher's safety (idempotency, confirmations,
+  cursor-after-commit, block-span cap). **Product distinction by a separate `API_TIER_RECEIVE_ADDRESS`**
+  so a $299 API payment can never be confused with a Pro payment. Tiers $299/6mo/12mo derived from env;
+  credits `api_tier_expires_at` (stacking from `max(now, existing)`). **No expiry sweep needed** — auth
+  gates on `api_tier_expires_at` live (`ApiCustomerRow.is_active()`).
+- Endpoints `GET /v1/billing` (tiers + receive address + customer status) and `POST /v1/billing/wallet`.
+- Gated by `API_TIER_PAYMENTS_ENABLED=false` (separate from `API_TIER_ENABLED`); never touches the RPC
+  while disabled. Verified: 7 watcher tests (crediting/idempotency/tiers/stacking/unmatched/underpayment)
+  + billing endpoint tests. Migration `0005` round-trips.
+- **Not yet done**: verification against one *real* on-chain USDC transfer (all tests mock the log shape) —
+  same final check the Pro tier did before go-live (PROJECT_STATE.md #35); do this before flipping
+  `API_TIER_PAYMENTS_ENABLED=true`.
 
 ## Cross-cutting (from readiness §5/§6 — don't skip at go-live)
 - Security review of the public surface (new attack surface — non-negotiable, like Execute).
