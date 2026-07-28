@@ -24,6 +24,19 @@ more infra. Recommend same-container for Phase A, revisit if load demands it.)
 
 ---
 
+## Phase A — STATUS: built & locally verified 2026-07-28 (not yet deployed)
+
+Tasks A1–A6 are implemented and verified locally; A7 (canary→promote deploy) is
+the only Phase-A item still pending. Verification done (against a throwaway local
+Postgres 16 + fakeredis, Docker being unavailable):
+- Migration `0003` round-trip up→down→up clean; DDL renders correct Postgres.
+- 15/15 api tests pass (key-gen unit + auth/gate/feed/pagination/stats/rate-limit
+  integration on real Postgres). Shared suite still 51/51 (additive change, no regression).
+- Real CLI mint → minted key authenticates against the live FastAPI app; `/v1/health`
+  200, tier-disabled 404, no-key 401, rate-limit 429, OpenAPI serves all 4 paths.
+- Framework: **FastAPI** (chosen — auto OpenAPI at `/docs`). Everything behind
+  `API_TIER_ENABLED=false`. A6 docs = auto OpenAPI for now (standalone `docs/api.md` optional).
+
 ## Phase A — task breakdown (ordered; each task is independently testable)
 
 ### A1 — Schema & keys  (`packages/shared`)

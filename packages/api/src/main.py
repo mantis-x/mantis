@@ -1,0 +1,63 @@
+"""
+Mantis API worker — the institutional read feed ($299/mo API tier, Phase A).
+Run: python -m src.main (from packages/api/)
+
+A FastAPI app served by uvicorn on $PORT, exposed via the Railway public
+domain. Reads the durable Postgres `signals` table. Authenticated routes are
+gated by API_TIER_ENABLED (see auth.py) — off by default, so this ships inert
+and serves only /v1/health until the tier is turned on. See
+docs/api_tier_build_plan.md.
+"""
+from __future__ import annotations
+
+import logging
+import os
+
+from dotenv import load_dotenv
+
+load_dotenv(dotenv_path=os.path.join(
+    os.path.dirname(__file__), "..", "..", "..", ".env"
+))
+
+logging.basicConfig(
+    level=os.getenv("LOG_LEVEL", "INFO"),
+    format="%(asctime)s [%(levelname)s] %(name)s — %(message)s",
+    datefmt="%H:%M:%S",
+)
+log = logging.getLogger("mantis.api")
+
+from fastapi import FastAPI  # noqa: E402
+
+from src.config import PORT, api_tier_enabled  # noqa: E402
+from src.routes import health, signals  # noqa: E402
+
+
+def create_app() -> FastAPI:
+    app = FastAPI(
+        title="Mantis Signal API",
+        version="1.0.0",
+        description=(
+            "Institutional feed of on-chain whale/accumulation signals with a "
+            "back-tested track record. Authenticate with `Authorization: Bearer <key>`."
+        ),
+    )
+    app.include_router(health.router)
+    app.include_router(signals.router)
+    return app
+
+
+app = create_app()
+
+
+def main() -> None:
+    import uvicorn
+
+    log.info("=" * 55)
+    log.info("  Mantis API — Institutional Feed (Phase A)")
+    log.info("  API_TIER_ENABLED=%s  port=%d", api_tier_enabled(), PORT)
+    log.info("=" * 55)
+    uvicorn.run(app, host="0.0.0.0", port=PORT, log_level=os.getenv("LOG_LEVEL", "info").lower())
+
+
+if __name__ == "__main__":
+    main()
