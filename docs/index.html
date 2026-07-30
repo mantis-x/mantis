@@ -916,6 +916,8 @@
                  style="background:var(--bg-card2);border:1px solid var(--border);border-radius:6px;padding:0.65rem 0.8rem;color:var(--text);font-family:var(--mono);font-size:0.8rem;" />
           <input id="afWallet" type="text" placeholder="0x… paying wallet (optional)"
                  style="background:var(--bg-card2);border:1px solid var(--border);border-radius:6px;padding:0.65rem 0.8rem;color:var(--text);font-family:var(--mono);font-size:0.8rem;" />
+          <textarea id="afNote" rows="2" placeholder="What are you building? (optional)"
+                 style="background:var(--bg-card2);border:1px solid var(--border);border-radius:6px;padding:0.65rem 0.8rem;color:var(--text);font-family:var(--mono);font-size:0.8rem;resize:vertical;"></textarea>
           <button type="submit" class="btn-primary" style="justify-content:center;">Request access →</button>
           <span id="afStatus" style="font-family:var(--mono);font-size:0.72rem;color:var(--text-3);min-height:1em;"></span>
         </form>
@@ -927,10 +929,11 @@
             var s=document.getElementById('afStatus');
             var email=document.getElementById('afEmail').value.trim();
             var wallet=document.getElementById('afWallet').value.trim();
+            var note=document.getElementById('afNote').value.trim();
             s.style.color='var(--text-3)'; s.textContent='Sending…';
             fetch('https://api.mantis.baiq.tech/v1/access-request',{
               method:'POST',headers:{'Content-Type':'application/json'},
-              body:JSON.stringify({email:email,wallet:wallet||null})
+              body:JSON.stringify({email:email,wallet:wallet||null,note:note||null})
             }).then(function(r){return r.json().then(function(j){return {ok:r.ok,j:j};});})
             .then(function(res){
               if(res.ok){ s.style.color='var(--green)'; s.textContent=(res.j&&res.j.message)||"Thanks — we'll be in touch."; f.reset(); }
