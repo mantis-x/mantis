@@ -14,7 +14,8 @@ Trader Joe, GMX V1 perps), HashKey Chain ERC-20 transfer flows, and Ethereum
 mainnet blue-chip Uniswap V3 pools (WETH/USDC, WETH/USDT, WBTC/WETH) around
 the clock. Detects smart money wallet clusters using z-score anomaly
 detection, enriches each signal through Claude Sonnet 5, and delivers
-plain-English alerts with confidence scores to Telegram, Discord, and LINE.
+plain-English alerts with confidence scores to Telegram (Discord/LINE ready
+but not enabled).
 Every signal is hashed and recorded immutably on-chain via
 `SignalAuditLog.sol` — fully auditable, forever.
 
@@ -25,8 +26,17 @@ safety guards, sizes the position, and executes autonomously. Every decision,
 including aborts, is logged to the agent's ERC-8004 on-chain identity via
 `AgentIdentity.sol`.
 
-Both products share one backend pipeline and one Railway deployment.
-Scout is the human interface. Execute is the autonomous layer.
+**Mantis API** is the programmatic layer ($299/mo institutional tier). The same
+enriched, back-tested signals exposed as an authenticated REST feed
+(`GET /v1/signals`, `/v1/signals/{id}` with PnL outcomes, `/v1/stats`) plus
+HMAC-signed **webhooks** for real-time push. Headless API customers
+(`api_customers` / `api_keys`, separate from chat subscribers), pay-for-a-period
+crypto billing in USDC on Arbitrum. Gated behind `API_TIER_ENABLED` /
+`API_TIER_PAYMENTS_ENABLED` (see the API tier section below).
+
+All three surfaces share one backend pipeline and one Railway deployment.
+Scout is the human interface, Execute is the autonomous layer, and the API is
+the programmatic/data layer.
 
 ---
 
@@ -44,13 +54,17 @@ ingestion ──────┤                            ├──► Redis ma
                                                         ▼
                                  enrichment — Claude Sonnet 5 (chain-aware)
                                                         │
-                              ┌─────────────────────────┤
-                              ▼                         ▼
-                         delivery                   executor
-                 chain badge + per-chain      Mantle + Arbitrum: live trading
-                 audit log (4 chains;         HashKey + Ethereum: alert-only
-                 Ethereum audit on testnet)   (flow monitoring / no swap executor)
-                  Telegram / Discord / LINE
+                        ┌───────────────────────────────┼───────────────────────┐
+                        ▼                               ▼                         ▼
+                   delivery                         executor                  tracking
+          chain badge + per-chain            Mantle + Arbitrum:       persists every signal to
+          audit log (4 chains,               live trading             Postgres, schedules PnL
+          all on mainnet)                    HashKey + Ethereum:      outcomes, and fans out
+          Telegram / Discord / LINE          alert-only               to mantis:signals:api
+                                                                              │
+                                                                              ▼
+                                              api      — authed REST feed (/v1/signals, /stats)
+                                              webhooks — HMAC-signed real-time push delivery
 ```
 
 ---
@@ -64,10 +78,12 @@ mantis/
 │   ├── detection/   # Z-score anomaly detection + wallet clustering
 │   ├── enrichment/  # LLM signal enrichment via Claude Sonnet 5
 │   ├── delivery/    # Telegram + Discord + LINE bots + per-chain on-chain audit logger
-│   └── executor/    # Intent engine + Byreal execution + ERC-8004
+│   ├── executor/    # Intent engine + Byreal execution + ERC-8004
+│   ├── api/         # API tier: FastAPI read feed + webhook dispatcher (Phases A/B/C)
+│   └── shared/      # SQLAlchemy models + Alembic migrations + tracking/billing watchers
 ├── contracts/       # Solidity: SignalAuditLog.sol + AgentIdentity.sol
-├── scripts/         # check_rpc_health.py · replay_block_range.py
-└── docs/            # Architecture, API reference, expansion plan
+├── scripts/         # check_rpc_health.py · replay_block_range.py · verify_pool.py · mint_api_key.py …
+└── docs/            # Architecture, API reference, expansion plan, execute/api readiness
 ```
 
 ---
@@ -112,8 +128,8 @@ Deploy: `npx hardhat run scripts/deploy_audit_log.js --network arbitrum` (swap `
 | `ARBITRUM_RPC_URL` | ingestion — defaults to public `arb1.arbitrum.io/rpc` (rate-limit risk, no paid key configured) |
 | `HASHKEY_RPC_URL` | ingestion, contracts — HashKey mainnet (chain_id 177) |
 | `HASHKEY_TESTNET_RPC_URL` | contracts — HashKey testnet (chain_id 133) |
-| `ETHEREUM_RPC_URL` | ingestion — Ethereum mainnet (chain_id 1); public RPCs here are stricter on `eth_getLogs` range than Mantle/Arbitrum's |
-| `ETHEREUM_SEPOLIA_RPC_URL` | delivery, executor, contracts — Ethereum Sepolia (chain_id 11155111), where the audit contracts are staged; deliberately separate from `ETHEREUM_RPC_URL` |
+| `ETHEREUM_RPC_URL` | ingestion **and** on-chain audit — Ethereum mainnet (chain_id 1); Ethereum's audit contracts are on **mainnet** (not Sepolia — see Contracts), driven by this same var. Public RPCs here are stricter on `eth_getLogs` range than Mantle/Arbitrum's |
+| `ETHEREUM_SEPOLIA_RPC_URL` | contracts only — optional Ethereum Sepolia (chain_id 11155111) network for Hardhat; vestigial (mainnet-direct deploy was used, no Sepolia staging) |
 | `ANTHROPIC_API_KEY` | enrichment — Claude Sonnet 5 |
 | `TELEGRAM_BOT_TOKEN` | delivery — Mantis Scout Telegram bot |
 | `DISCORD_BOT_TOKEN` | delivery — Discord bot (optional) |
@@ -122,8 +138,14 @@ Deploy: `npx hardhat run scripts/deploy_audit_log.js --network arbitrum` (swap `
 | `AUDIT_CONTRACT_ADDRESS` | delivery, executor — SignalAuditLog.sol / AgentIdentity.sol shared default; override per chain via `ARBITRUM_*` / `HASHKEY_*` / `ETHEREUM_*` prefixed vars if a deploy ever diverges (Ethereum's will always diverge — it's on a different network entirely) |
 | `AGENT_IDENTITY_CONTRACT_ADDRESS` | executor — AgentIdentity.sol |
 | `ZSCORE_THRESHOLD` | detection — global anomaly threshold (default `2.5`) |
-| `ZSCORE_THRESHOLD_ARBITRUM` | detection — per-chain override (default `3.5`) |
-| `NANSEN_API_KEY` | ingestion — wallet intelligence |
+| `ZSCORE_THRESHOLD_<CHAIN>` | detection — optional per-chain override; **not set in production** (falls back to the global `2.5`) — raising it also throttles the multi-wallet path, the only current source of delivered Arbitrum signals |
+| `MIN_CANDIDATE_USD` / `SOLO_MIN_USD_<CHAIN>` / `MULTIWALLET_MIN_USD[_<CHAIN>]` | detection — pre-enrichment, solo, and multi-wallet USD floors for noise/cost control (e.g. `SOLO_MIN_USD_ETHEREUM=500000`, `MULTIWALLET_MIN_USD_ETHEREUM=1000000`) |
+| `API_TIER_ENABLED` | api — gates all authed API routes (404 when false); `/v1/health` stays up regardless |
+| `API_TIER_PAYMENTS_ENABLED` | shared/tracking — enables the API-tier USDC payment watcher (independent of `API_TIER_ENABLED`) |
+| `API_TIER_RECEIVE_ADDRESS` | shared — Arbitrum wallet API payments are sent to; **must differ from `PRO_TIER_RECEIVE_ADDRESS`** (shared address cross-credits) |
+| `API_TIER_PRICE_USDC` | api, shared — 1-month price (default `299`); 6mo/12mo tiers derived with discounts |
+| `PRO_TIER_PAYMENTS_ENABLED` · `PRO_TIER_RECEIVE_ADDRESS` · `PRO_TIER_PRICE_USDC` | shared/tracking, delivery — Telegram Pro tier crypto billing (USDC on Arbitrum) |
+| `NANSEN_API_KEY` | enrichment — optional smart-money wallet labels (fallback to Mantis's own track record when unset) |
 | `ELFA_API_KEY` | enrichment — protocol sentiment |
 
 ---
@@ -138,6 +160,38 @@ Deploy: `npx hardhat run scripts/deploy_audit_log.js --network arbitrum` (swap `
 | Ethereum | Live (2026-07-18) | Uniswap V3 blue-chip pools — USDC/WETH, WETH/USDT, WBTC/WETH, all 0.05% tier (verified real via `eth_getLogs`, not assumed) | Scout only — no swap executor built; `executor.py._do_swap`/`_wallet_balance_usd` explicitly raise rather than silently falling through to the Mantle path. Audit/identity contracts live on mainnet, requires `ETHEREUM_*` address overrides — see Contracts |
 
 Adding a new chain: add a `ChainConfig` entry in `packages/ingestion/src/chains.py`, set `CHAINS=mantle,arbitrum,hashkey,ethereum,<new>` — no other code changes needed for ingestion/detection. Delivery (bot chain lists, `CHAIN_META`) and executor (`_do_swap` routing) still need manual updates per chain — see Ethereum's build-out for the full list of touchpoints.
+
+---
+
+## API tier
+
+Programmatic access to the same enriched signals ($299/mo institutional tier).
+FastAPI app (`packages/api`, auto-docs at `/docs`) + a webhook dispatcher, both
+run as their own workers. Auth is `Authorization: Bearer <key>`; keys are stored
+hashed and minted with `scripts/mint_api_key.py`.
+
+| Endpoint | Purpose |
+|---|---|
+| `GET /v1/health` | Liveness (unauthenticated) |
+| `GET /v1/signals` | List signals — filters `chain`, `signal_type`, `min_confidence`, `since`; cursor pagination |
+| `GET /v1/signals/{id}` | One signal + its 1h/4h/24h/7d PnL outcomes |
+| `GET /v1/stats` | Per-chain signal counts + directional hit-rate |
+| `POST/GET/DELETE /v1/webhooks` · `/{id}/test` | Manage HMAC-signed webhook subscriptions (per-customer, SSRF-guarded) |
+| `GET /v1/billing` · `POST /v1/billing/wallet` | Pricing/status + register the paying wallet |
+
+**Webhooks** POST each new signal with `X-Mantis-Signature` (HMAC-SHA256 over
+`{timestamp}.{body}`) + `X-Mantis-Timestamp`; verify with the `whsec_` secret
+returned once at registration. Bounded-concurrency delivery, backoff retries,
+consecutive-failure auto-disable.
+
+**Billing** is pay-for-a-period USDC on Arbitrum (1mo `299` / 6mo −5% / 12mo
+−10%), matched by a separate receive address (never Pro's). Everything is gated
+by `API_TIER_ENABLED` / `API_TIER_PAYMENTS_ENABLED` (default off). See
+`docs/api_tier_readiness.md` and `docs/api_tier_build_plan.md`.
+
+> **Not yet cleared before serving external customers** (billing is functional
+> but these gate real go-live): security review of the public surface, SSRF
+> DNS-rebind hardening, a paid RPC / SLA, and the legal/entity/ToS decision.
 
 ---
 
@@ -156,5 +210,5 @@ python scripts/replay_block_range.py --chain arbitrum --from 479900000 --to 4799
 ## Stack
 
 Python 3.11 · Solidity 0.8.20 · web3.py · Claude Sonnet 5 · Byreal Skills CLI ·
-Nansen API · Elfa AI · Telegram Bot API · Discord API · LINE Messaging API ·
+FastAPI · uvicorn · Nansen API · Elfa AI · Telegram Bot API · Discord API · LINE Messaging API ·
 Postgres · Redis · Hardhat · Docker · Mantle L2 · Arbitrum L2 · HashKey Chain · Ethereum
