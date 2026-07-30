@@ -48,7 +48,8 @@ def create_app() -> FastAPI:
         description=(
             "Institutional feed of on-chain whale/accumulation signals with a "
             "back-tested track record. Authenticate with `Authorization: Bearer <key>`. "
-            "Keys are issued on request — DM [@mantis2026](https://x.com/mantis2026)."
+            "Request a key at [mantis.baiq.tech](https://mantis.baiq.tech/#api) "
+            "or DM [@mantis2026](https://x.com/mantis2026)."
         ),
     )
     app.add_middleware(
