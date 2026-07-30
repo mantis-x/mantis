@@ -38,7 +38,8 @@ def create_app() -> FastAPI:
         version="1.0.0",
         description=(
             "Institutional feed of on-chain whale/accumulation signals with a "
-            "back-tested track record. Authenticate with `Authorization: Bearer <key>`."
+            "back-tested track record. Authenticate with `Authorization: Bearer <key>`. "
+            "Keys are issued on request — DM [@mantis2026](https://x.com/mantis2026)."
         ),
     )
     app.include_router(health.router)
