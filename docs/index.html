@@ -904,14 +904,41 @@
           <li>USDC billing on Arbitrum · $299/mo · 6mo &amp; 12mo discounts</li>
           <li>Same signals as Scout, on-chain-audited via <code style="font-family:var(--mono);font-size:0.8em;color:var(--green)">SignalAuditLog.sol</code></li>
         </ul>
-        <div style="margin-top:1.5rem;display:flex;gap:0.75rem;flex-wrap:wrap;">
-          <a href="https://x.com/mantis2026" target="_blank" rel="noopener" class="btn-primary">
-            Request access →
-          </a>
+        <div style="margin-top:1.5rem;">
           <a href="https://api.mantis.baiq.tech/docs" target="_blank" rel="noopener" class="btn-secondary">
             Read the API docs →
           </a>
         </div>
+
+        <form id="accessForm" style="margin-top:1.75rem;display:flex;flex-direction:column;gap:0.6rem;max-width:440px;">
+          <label style="font-family:var(--mono);font-size:0.7rem;letter-spacing:0.08em;text-transform:uppercase;color:var(--text-3);">Get API access</label>
+          <input id="afEmail" type="email" required placeholder="you@fund.xyz"
+                 style="background:var(--bg-card2);border:1px solid var(--border);border-radius:6px;padding:0.65rem 0.8rem;color:var(--text);font-family:var(--mono);font-size:0.8rem;" />
+          <input id="afWallet" type="text" placeholder="0x… paying wallet (optional)"
+                 style="background:var(--bg-card2);border:1px solid var(--border);border-radius:6px;padding:0.65rem 0.8rem;color:var(--text);font-family:var(--mono);font-size:0.8rem;" />
+          <button type="submit" class="btn-primary" style="justify-content:center;">Request access →</button>
+          <span id="afStatus" style="font-family:var(--mono);font-size:0.72rem;color:var(--text-3);min-height:1em;"></span>
+        </form>
+        <script>
+        (function(){
+          var f=document.getElementById('accessForm'); if(!f) return;
+          f.addEventListener('submit',function(e){
+            e.preventDefault();
+            var s=document.getElementById('afStatus');
+            var email=document.getElementById('afEmail').value.trim();
+            var wallet=document.getElementById('afWallet').value.trim();
+            s.style.color='var(--text-3)'; s.textContent='Sending…';
+            fetch('https://api.mantis.baiq.tech/v1/access-request',{
+              method:'POST',headers:{'Content-Type':'application/json'},
+              body:JSON.stringify({email:email,wallet:wallet||null})
+            }).then(function(r){return r.json().then(function(j){return {ok:r.ok,j:j};});})
+            .then(function(res){
+              if(res.ok){ s.style.color='var(--green)'; s.textContent=(res.j&&res.j.message)||"Thanks — we'll be in touch."; f.reset(); }
+              else { s.style.color='#e5484d'; s.textContent=(res.j&&res.j.detail)||'Something went wrong — try again.'; }
+            }).catch(function(){ s.style.color='#e5484d'; s.textContent='Network error — try again.'; });
+          });
+        })();
+        </script>
       </div>
 
       <div class="product-card">

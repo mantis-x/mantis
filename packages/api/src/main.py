@@ -27,9 +27,18 @@ logging.basicConfig(
 log = logging.getLogger("mantis.api")
 
 from fastapi import FastAPI  # noqa: E402
+from fastapi.middleware.cors import CORSMiddleware  # noqa: E402
 
 from src.config import PORT, api_tier_enabled  # noqa: E402
-from src.routes import billing, health, signals, webhooks  # noqa: E402
+from src.routes import access, billing, health, signals, webhooks  # noqa: E402
+
+# Browser origins allowed to call the API (the marketing site's access form).
+# Scoped, not "*" — comma-separated override via API_ALLOW_ORIGINS.
+_ALLOW_ORIGINS = [
+    o.strip() for o in os.getenv(
+        "API_ALLOW_ORIGINS", "https://mantis.baiq.tech,https://www.mantis.baiq.tech"
+    ).split(",") if o.strip()
+]
 
 
 def create_app() -> FastAPI:
@@ -42,10 +51,17 @@ def create_app() -> FastAPI:
             "Keys are issued on request — DM [@mantis2026](https://x.com/mantis2026)."
         ),
     )
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=_ALLOW_ORIGINS,
+        allow_methods=["GET", "POST", "DELETE", "OPTIONS"],
+        allow_headers=["Authorization", "Content-Type"],
+    )
     app.include_router(health.router)
     app.include_router(signals.router)
     app.include_router(webhooks.router)
     app.include_router(billing.router)
+    app.include_router(access.router)
     return app
 
 

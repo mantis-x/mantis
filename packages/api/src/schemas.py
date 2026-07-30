@@ -108,3 +108,15 @@ class BillingInfoOut(BaseModel):
     registered_wallet: Optional[str] = None
     api_tier_expires_at: Optional[str] = None
     active: bool
+
+
+# ── access request (lead capture) ───────────────────────────────────────────
+class AccessRequestIn(BaseModel):
+    email: str
+    wallet: Optional[str] = None
+    note: Optional[str] = None
+
+
+class AccessResultOut(BaseModel):
+    ok: bool
+    message: str

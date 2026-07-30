@@ -28,22 +28,32 @@ def _redis() -> redis.Redis:
     return _client
 
 
-def check_rate_limit(key_id: int, limit_per_min: int) -> bool:
-    """Return True if the request is allowed, False if the per-minute limit is
-    exceeded. Fails open on any Redis error."""
-    if limit_per_min <= 0:
+def client() -> redis.Redis:
+    """Shared Redis client (also honors the fakeredis injected in tests)."""
+    return _redis()
+
+
+def check_rate_limit_key(key: str, limit: int, window_s: int = 60) -> bool:
+    """Fixed-window rate limit for an arbitrary string key (per-API-key, per-IP,
+    …). Returns True if allowed. Fails open on any Redis error."""
+    if limit <= 0:
         return True
-    window = int(time.time()) // 60
-    redis_key = f"mantis:api:ratelimit:{key_id}:{window}"
+    window = int(time.time()) // window_s
+    redis_key = f"mantis:api:ratelimit:{key}:{window}"
     try:
         r = _redis()
         count = r.incr(redis_key)
         if count == 1:
-            r.expire(redis_key, 60)
-        return count <= limit_per_min
+            r.expire(redis_key, window_s)
+        return count <= limit
     except Exception as exc:  # noqa: BLE001 — fail open, never take the API down
         log.warning("Rate-limit check failed (allowing request): %s", exc)
         return True
+
+
+def check_rate_limit(key_id: int, limit_per_min: int) -> bool:
+    """Per-API-key per-minute limit (used by the auth dependency)."""
+    return check_rate_limit_key(str(key_id), limit_per_min, window_s=60)
 
 
 def reset_client_for_tests() -> None:
