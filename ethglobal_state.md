@@ -87,7 +87,7 @@ Scout signal
 - [x] Verification request shown in demo.
 - [x] Human completion shown in demo.
 - [x] Validated result shown in demo.
-- [ ] Protected action shown in demo.
+- [x] Protected action shown in demo (executor returned `status: success` with `approval_status: approved`; venue remains dry-run).
 - [x] Integration debrief completed with time-to-first-success, friction, and improvement.
 - [ ] Submit prize entry.
 
@@ -95,7 +95,7 @@ Scout signal
 
 - [x] Uniswap integration exists in the repository.
 - [x] `FEEDBACK.md` exists.
-- [ ] Live approved swap demonstrated.
+- [x] Live approved dry-run swap demonstrated; real-money execution remains disabled.
 - [ ] Developer feedback form submitted.
 - [ ] Submit prize entry.
 
