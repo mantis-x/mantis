@@ -54,8 +54,8 @@ Scout signal
 - [x] Existing dry-run mode preserved.
 - [x] `FEEDBACK.md` added.
 - [ ] Run an approved end-to-end Arbitrum swap in the target environment.
-- [ ] Submit the Uniswap Developer Feedback Form.
-- [ ] Add the form/link details to the submission package.
+- [x] Submit the Uniswap Developer Feedback Form.
+- [x] Add the FEEDBACK.md link to the submission package.
 
 ### Curvegrid
 
@@ -96,7 +96,7 @@ Scout signal
 - [x] Uniswap integration exists in the repository.
 - [x] `FEEDBACK.md` exists.
 - [x] Live approved dry-run swap demonstrated; real-money execution remains disabled.
-- [ ] Developer feedback form submitted.
+- [x] Developer feedback form submitted.
 - [ ] Submit prize entry.
 
 ### Curvegrid
@@ -109,13 +109,13 @@ Scout signal
 ## Known blockers
 
 1. Uniswap live/testnet approved swap evidence is still pending; current protected execution evidence is dry-run.
-2. Final ETHGlobal assets (logo, banner, screenshots, video) and sponsor form submissions are external actions still pending.
+2. Final ETHGlobal assets (logo, banner, screenshots, video) and prize submissions are external actions still pending.
 
 ## Next actions
 
 1. Record the 2–4 minute demo covering World approval, approved dry-run, expiry rejection, and intent mismatch.
 2. Finish ETHGlobal team/social metadata, logo, banner, and three screenshots.
-3. Submit the World entry and complete the Uniswap Developer Feedback Form.
+3. Submit the World and Uniswap prize entries.
 4. Submit the final ETHGlobal project before the deadline.
 
 ## Important configuration

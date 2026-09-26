@@ -36,6 +36,17 @@ does the selected venue receive the swap. Missing, rejected, expired, or
 unverifiable proofs fail closed and are logged as aborted decisions. Set
 `WORLD_ID_APPROVAL_THRESHOLD_USD=0` to require approval for every action.
 
+### ETHGlobal integration references
+
+- Uniswap feedback: [`FEEDBACK.md`](FEEDBACK.md)
+- Uniswap Developer Feedback Form: <https://developers.uniswap.org/hackathon-feedback>
+- World OIDC client and signed artifact issuance:
+  [`packages/api/src/world_oidc.py`](packages/api/src/world_oidc.py)
+- World approval gate and exact intent binding:
+  [`packages/executor/src/approval/world_id.py`](packages/executor/src/approval/world_id.py)
+- Arbitrum Uniswap V3 SwapRouter02 and QuoterV2 integration:
+  [`packages/executor/src/arbitrum/swap_executor.py`](packages/executor/src/arbitrum/swap_executor.py)
+
 **Mantis API** is the programmatic layer ($299/mo institutional tier). The same
 enriched, back-tested signals exposed as an authenticated REST feed
 (`GET /v1/signals`, `/v1/signals/{id}` with PnL outcomes, `/v1/stats`) plus
