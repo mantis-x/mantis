@@ -107,4 +107,6 @@ class RuleEngine:
             max_slippage = float(rules.get("max_slippage", 0.02)),
             max_position = float(rules.get("max_position_pct", 5.0)),
             chain        = signal.get("chain", "mantle"),
+            world_id_proof = signal.get("world_id_proof"),
+            approval_expires_at = signal.get("approval_expires_at"),
         )

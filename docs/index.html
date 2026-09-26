@@ -881,6 +881,43 @@
 
 <hr class="section-divider" />
 
+<!-- HUMAN APPROVAL -->
+<section id="human-approval">
+  <div class="section">
+    <p class="section-label">Execute · Human Approval</p>
+    <h2>Consent before the move.</h2>
+    <p class="section-intro">
+      Consequential Mantis trades can require a verified World ID approval before Execute is allowed to call Uniswap. Enter a trade-intent hash to start the approval journey.
+    </p>
+    <div class="product-card" style="max-width:620px;">
+      <form id="worldApprovalForm" style="display:flex;flex-direction:column;gap:0.7rem;">
+        <label for="worldIntentHash" style="font-family:var(--mono);font-size:0.7rem;letter-spacing:0.08em;text-transform:uppercase;color:var(--text-3);">Trade intent hash</label>
+        <input id="worldIntentHash" type="text" required minlength="10" placeholder="0x… canonical Mantis intent hash"
+               style="background:var(--bg-card2);border:1px solid var(--border);border-radius:6px;padding:0.65rem 0.8rem;color:var(--text);font-family:var(--mono);font-size:0.8rem;" />
+        <button type="submit" class="btn-primary" style="justify-content:center;">Approve with World ID →</button>
+        <span id="worldApprovalStatus" style="font-family:var(--mono);font-size:0.72rem;color:var(--text-3);min-height:1em;"></span>
+      </form>
+      <p style="margin:1rem 0 0;color:var(--text-3);font-size:0.75rem;line-height:1.6;">
+        The API validates the OIDC response server-side and returns a short-lived artifact. Unapproved or expired artifacts never reach the execution venue.
+      </p>
+    </div>
+    <script>
+    (function(){
+      var f=document.getElementById('worldApprovalForm'); if(!f) return;
+      f.addEventListener('submit',function(e){
+        e.preventDefault();
+        var hash=document.getElementById('worldIntentHash').value.trim();
+        var status=document.getElementById('worldApprovalStatus');
+        status.style.color='var(--text-3)'; status.textContent='Opening World ID…';
+        window.location.href='https://api.mantis.baiq.tech/auth/world/login?signal_hash='+encodeURIComponent(hash);
+      });
+    })();
+    </script>
+  </div>
+</section>
+
+<hr class="section-divider" />
+
 <!-- API -->
 <section id="api">
   <div class="section">

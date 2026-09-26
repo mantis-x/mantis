@@ -6,7 +6,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import datetime
 from enum import Enum
-from typing import Optional
+from typing import Any, Mapping, Optional
 
 
 class ActionType(str, Enum):
@@ -42,6 +42,11 @@ class ExecutionRequest:
 
     # Chain this execution runs on
     chain:          str = "mantle"
+
+    # Untrusted client-provided World ID proof.  It is never accepted without
+    # server-side verification by WorldIDVerifier.
+    world_id_proof: Optional[Mapping[str, Any]] = None
+    approval_expires_at: Optional[datetime] = None
 
     created_at: datetime = None
 

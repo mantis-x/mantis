@@ -24,6 +24,7 @@ from src.identity.agent_registry      import AgentRegistry
 from src.models.execution_request     import ExecutionRequest, ActionType
 from src.models.execution_result      import ExecutionResult, ResultStatus
 from src.arbitrum.swap_executor       import ArbitrumSwapExecutor
+from src.approval.world_id             import WorldIDApprovalGate
 
 log = logging.getLogger(__name__)
 
@@ -43,6 +44,7 @@ class Executor:
         self.guards       = GuardRunner()
         self.byreal       = ByrealCLIRunner(dry_run=DRY_RUN)
         self.arb_executor = ArbitrumSwapExecutor(dry_run=DRY_RUN)
+        self.approval_gate = WorldIDApprovalGate()
         self._identity_loggers: dict[str, ERC8004Logger] = {}
 
         log.info(
@@ -99,6 +101,8 @@ class Executor:
 
             # Log to ERC-8004 on the request's origin chain
             detail = result.tx_hash if result.success else (result.abort_reason or "")
+            if result.approval_status:
+                detail = f"approval={result.approval_status}; {detail}"
             self._identity_logger(request.chain).log_decision(
                 agent_id    = agent.agent_id,
                 signal_id   = request.signal_id,
@@ -125,7 +129,7 @@ class Executor:
         return self._identity_loggers[chain]
 
     def _execute(self, request: ExecutionRequest, daily_spent_usd: float = 0.0) -> ExecutionResult:
-        """Run guards then execute via Byreal CLI."""
+        """Run guards, human approval, then execute via the selected venue."""
 
         # ── Guards ──────────────────────────────────────────────────────────
         wallet_balance_usd = self._wallet_balance_usd(request.chain)
@@ -135,6 +139,20 @@ class Executor:
                 request,
                 reason = guard_result.reason,
                 guard  = guard_result.guard,
+            )
+
+        # Approval is checked after deterministic safety guards but before any
+        # venue call.  This makes the protected action fail closed and keeps
+        # the exact approved request bound to the World action string.
+        # getattr keeps lightweight unit-test/manual constructions of Executor
+        # (which intentionally bypass __init__) safe and fail closed.
+        approval = getattr(self, "approval_gate", WorldIDApprovalGate()).check(request)
+        if not approval.approved:
+            return ExecutionResult.aborted(
+                request,
+                reason = approval.reason,
+                guard = "world_id_approval",
+                approval_status = approval.status.value,
             )
 
         # ── Execute via Byreal ───────────────────────────────────────────────
@@ -155,6 +173,7 @@ class Executor:
                 tx_hash         = tx_hash,
                 amount_usd      = request.amount_usd,
                 execution_price = result_data.get("execution_price"),
+                approval_status = approval.status.value,
             )
 
         except ByrealCLIError as exc:

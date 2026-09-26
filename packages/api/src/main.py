@@ -30,7 +30,7 @@ from fastapi import FastAPI  # noqa: E402
 from fastapi.middleware.cors import CORSMiddleware  # noqa: E402
 
 from src.config import PORT, api_tier_enabled  # noqa: E402
-from src.routes import access, billing, health, signals, webhooks  # noqa: E402
+from src.routes import access, billing, health, signals, webhooks, world_auth  # noqa: E402
 
 # Browser origins allowed to call the API (the marketing site's access form).
 # Scoped, not "*" — comma-separated override via API_ALLOW_ORIGINS.
@@ -63,6 +63,7 @@ def create_app() -> FastAPI:
     app.include_router(webhooks.router)
     app.include_router(billing.router)
     app.include_router(access.router)
+    app.include_router(world_auth.router)
     return app
 
 

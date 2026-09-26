@@ -8,6 +8,10 @@ Signal-to-execution AI running on **Mantle**, **Arbitrum**, **HashKey Chain**, a
 
 ## What Mantis is
 
+**ETHGlobal submission summary:** Mantis is an AI agent that detects on-chain
+anomalies, requests verified human consent for consequential trades, executes
+approved Arbitrum swaps through Uniswap V3, and records every decision on-chain.
+
 **Mantis Scout** is the intelligence layer. Monitors Mantle DeFi protocols
 (Agni Finance, Merchant Moe), Arbitrum protocols (Uniswap V3,
 Trader Joe, GMX V1 perps), HashKey Chain ERC-20 transfer flows, and Ethereum
@@ -25,6 +29,12 @@ money into mETH pools when confidence exceeds 75" — and the agent evaluates
 safety guards, sizes the position, and executes autonomously. Every decision,
 including aborts, is logged to the agent's ERC-8004 on-chain identity via
 `AgentIdentity.sol`.
+
+For high-value actions, Execute adds a World ID for Agents human-consent gate:
+the client submits a proof, the backend validates it with World, and only then
+does the selected venue receive the swap. Missing, rejected, expired, or
+unverifiable proofs fail closed and are logged as aborted decisions. Set
+`WORLD_ID_APPROVAL_THRESHOLD_USD=0` to require approval for every action.
 
 **Mantis API** is the programmatic layer ($299/mo institutional tier). The same
 enriched, back-tested signals exposed as an authenticated REST feed
@@ -135,6 +145,9 @@ Deploy: `npx hardhat run scripts/deploy_audit_log.js --network arbitrum` (swap `
 | `DISCORD_BOT_TOKEN` | delivery — Discord bot (optional) |
 | `LINE_CHANNEL_ACCESS_TOKEN` / `LINE_CHANNEL_SECRET` | delivery — LINE bot (optional) |
 | `BYREAL_PRIVATE_KEY` | executor — Execute agent wallet |
+| `WORLD_ID_APPROVAL_THRESHOLD_USD` | executor — USD threshold for mandatory human approval (default `100`) |
+| `WORLD_ID_CLIENT_ID` / `WORLD_ID_CLIENT_SECRET` / `WORLD_ID_REDIRECT_URI` | api — World ID Agents OIDC client credentials and exact callback URI |
+| `WORLD_ID_ISSUER` / `WORLD_ID_STATE_SECRET` / `WORLD_ID_ARTIFACT_TTL_SECONDS` | api + executor — OIDC issuer, shared artifact-signing secret, and approval lifetime |
 | `AUDIT_CONTRACT_ADDRESS` | delivery, executor — SignalAuditLog.sol / AgentIdentity.sol shared default; override per chain via `ARBITRUM_*` / `HASHKEY_*` / `ETHEREUM_*` prefixed vars if a deploy ever diverges (Ethereum's will always diverge — it's on a different network entirely) |
 | `AGENT_IDENTITY_CONTRACT_ADDRESS` | executor — AgentIdentity.sol |
 | `ZSCORE_THRESHOLD` | detection — global anomaly threshold (default `2.5`) |

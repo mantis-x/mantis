@@ -31,6 +31,7 @@ class ExecutionResult:
     # On abort/failure
     abort_reason:   Optional[str]   = None
     guard_failed:   Optional[str]   = None  # which guard triggered
+    approval_status:Optional[str]   = None
 
     # Timing
     executed_at: datetime = None
@@ -55,11 +56,12 @@ class ExecutionResult:
             "execution_price": self.execution_price,
             "abort_reason":    self.abort_reason,
             "guard_failed":    self.guard_failed,
+            "approval_status": self.approval_status,
             "executed_at":     self.executed_at.isoformat(),
         }
 
     @classmethod
-    def aborted(cls, request, reason: str, guard: str = "") -> "ExecutionResult":
+    def aborted(cls, request, reason: str, guard: str = "", approval_status: Optional[str] = None) -> "ExecutionResult":
         return cls(
             agent_id     = request.agent_id,
             signal_id    = request.signal_id,
@@ -67,12 +69,14 @@ class ExecutionResult:
             status       = ResultStatus.ABORTED,
             abort_reason = reason,
             guard_failed = guard,
+            approval_status = approval_status,
         )
 
     @classmethod
     def success_from(
         cls, request, tx_hash: str, amount_usd: float,
         execution_price: Optional[float] = None,
+        approval_status: Optional[str] = None,
     ) -> "ExecutionResult":
         return cls(
             agent_id        = request.agent_id,
@@ -82,4 +86,5 @@ class ExecutionResult:
             tx_hash         = tx_hash,
             amount_usd      = amount_usd,
             execution_price = execution_price,
+            approval_status = approval_status,
         )
