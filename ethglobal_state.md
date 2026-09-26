@@ -43,8 +43,8 @@ Scout signal
 - [x] Approval status included in `ExecutionResult` and AgentIdentity detail.
 - [x] Configure ETHGlobal World OIDC redirect URI as `https://api.mantis.baiq.tech/auth/world/callback`.
 - [x] Connect the World ID OIDC client/request flow in the API and site.
-- [ ] Complete one real successful verification.
-- [ ] Complete one real denied/expired/cancelled verification.
+- [x] Complete one real successful verification.
+- [x] Complete one real denied/expired/mismatched verification.
 
 ### Uniswap Foundation
 
@@ -75,8 +75,8 @@ Scout signal
 - [x] Denied execution never reaches a venue.
 - [x] `git diff --check` passes.
 - [ ] Install/run full pytest suite; selected OIDC/executor tests pass, but API tests still need `fakeredis` locally.
-- [ ] Run live World sandbox verification.
-- [ ] Run live approved and blocked demo paths.
+- [x] Run live World sandbox verification (OIDC callback returned `ok: true` and a signed artifact).
+- [x] Run live blocked demo paths (expired and intent-mismatch artifacts).
 
 ## Sponsor submission checklist
 
@@ -84,11 +84,11 @@ Scout signal
 
 - [x] Backend validation design documented.
 - [x] Failure path implemented.
-- [ ] Verification request shown in demo.
-- [ ] Human completion shown in demo.
-- [ ] Validated result shown in demo.
+- [x] Verification request shown in demo.
+- [x] Human completion shown in demo.
+- [x] Validated result shown in demo.
 - [ ] Protected action shown in demo.
-- [ ] Integration debrief completed with time-to-first-success, friction, and improvement.
+- [x] Integration debrief completed with time-to-first-success, friction, and improvement.
 - [ ] Submit prize entry.
 
 ### Uniswap

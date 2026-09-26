@@ -65,9 +65,27 @@ use an expired `approval_expires_at`; all three stop before a venue call.
 
 ## Integration debrief
 
-Complete these fields after the first sandbox run for the World submission:
+### ETHGlobal World submission notes
 
-- Time to first successful verification: `TBD`
-- Friction encountered: `TBD`
-- Missing capability or documentation: `TBD`
-- Highest-impact improvement: `TBD`
+- **Time to first successful verification:** Same build session; the first
+  successful sandbox callback was reached after configuring the new World app,
+  matching the exact HTTPS callback, and deploying the OIDC client.
+- **Friction encountered:** The sandbox initially returned `invalid_request`
+  until the authorization request included S256 PKCE. The callback also needed
+  to handle denial/error responses without requiring an authorization code. The
+  executor demo then exposed two useful integration details: artifacts are
+  short-lived, and the approved artifact must use the exact canonical intent
+  hash, including `signal_id`.
+- **Missing capability or documentation:** A clearer sandbox error for missing
+  PKCE and a first-party end-to-end test recipe connecting an approved OIDC
+  artifact to an execution request would reduce integration time.
+- **Highest-impact improvement:** Provide a documented, provider-supported
+  approval test harness that returns a canonical intent example and makes the
+  authorization requirements (PKCE, redirect URI, nonce, and token exchange)
+  explicit.
+
+Observed demo evidence:
+
+- Successful callback returned `ok: true` and a signed artifact.
+- Expired artifact was rejected before venue execution.
+- Artifact bound to a different intent was rejected before venue execution.
