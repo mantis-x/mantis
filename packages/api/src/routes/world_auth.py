@@ -23,8 +23,24 @@ def world_login(signal_hash: str = Query(..., min_length=10, max_length=128)) ->
 
 
 @router.get("/callback")
-def world_callback(code: str = Query(...), state: str = Query(...)) -> dict:
+def world_callback(
+    code: str | None = Query(None),
+    state: str | None = Query(None),
+    error: str | None = Query(None),
+    error_description: str | None = Query(None),
+) -> dict:
     """Exchange the code and return a short-lived server-signed approval artifact."""
+    if error:
+        # World redirects here without `code` for denial/cancellation/invalid
+        # requests. Handle that as a first-class failed approval rather than
+        # allowing FastAPI to emit a misleading validation 422.
+        detail = "World ID approval was not completed"
+        if error_description:
+            detail = f"{detail}: {error_description[:160]}"
+        log.info("World approval did not complete: %s", error)
+        raise HTTPException(status_code=400, detail=detail)
+    if not code or not state:
+        raise HTTPException(status_code=400, detail="World callback requires code and state")
     try:
         return {"ok": True, **exchange_and_issue_artifact(code, state)}
     except WorldOIDCError as exc:
