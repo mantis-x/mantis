@@ -35,6 +35,11 @@ def _b64(value: bytes) -> str:
     return base64.urlsafe_b64encode(value).rstrip(b"=").decode()
 
 
+def _pkce_verifier(nonce: str) -> str:
+    """Derive a per-request verifier without putting it in the browser state."""
+    return _b64(hmac.new(_secret(), f"pkce:{nonce}".encode(), hashlib.sha256).digest())
+
+
 def _unb64(value: str) -> bytes:
     return base64.urlsafe_b64decode(value + "=" * (-len(value) % 4))
 
@@ -75,6 +80,7 @@ def authorization_url(intent_hash: str) -> str:
         raise WorldOIDCError("World OIDC client ID and redirect URI are required")
     nonce = secrets.token_urlsafe(24)
     state = _sign({"intent_hash": intent_hash, "nonce": nonce, "exp": int(time.time()) + 600})
+    verifier = _pkce_verifier(nonce)
     metadata = _discover()
     params = {
         "response_type": "code",
@@ -83,6 +89,8 @@ def authorization_url(intent_hash: str) -> str:
         "scope": "openid",
         "state": state,
         "nonce": nonce,
+        "code_challenge": _b64(hashlib.sha256(verifier.encode()).digest()),
+        "code_challenge_method": "S256",
     }
     return f"{metadata['authorization_endpoint']}?{urlencode(params)}"
 
@@ -102,6 +110,7 @@ def exchange_and_issue_artifact(code: str, state: str) -> dict[str, Any]:
             "grant_type": "authorization_code",
             "code": code,
             "redirect_uri": redirect_uri,
+            "code_verifier": _pkce_verifier(state_data["nonce"]),
         },
         auth=(client_id, client_secret),
         headers={"Accept": "application/json"},
