@@ -1,6 +1,7 @@
 const { ethers, network } = require("hardhat");
 const fs = require("fs");
 const path = require("path");
+const { waitForReceipt } = require("./wait_for_receipt");
 
 async function main() {
   const [deployer] = await ethers.getSigners();
@@ -9,9 +10,17 @@ async function main() {
 
   const Factory = await ethers.getContractFactory("AgentIdentity");
   const contract = await Factory.deploy();
-  await contract.waitForDeployment();
+  const deployTx = contract.deploymentTransaction();
+  if (!deployTx) throw new Error("Deployment transaction was not created");
+  const deployReceipt = await waitForReceipt(network.config.url, deployTx.hash);
+  if (deployReceipt.status !== "0x1") {
+    throw new Error(`Deployment transaction reverted: ${deployTx.hash}`);
+  }
 
-  const address = await contract.getAddress();
+  const address = ethers.getCreateAddress({
+    from: deployer.address,
+    nonce: deployTx.nonce,
+  });
   console.log(`AgentIdentity deployed: ${address}`);
 
   const receipt = {

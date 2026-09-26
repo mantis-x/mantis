@@ -13,6 +13,7 @@
 const { ethers, network } = require("hardhat");
 const fs   = require("fs");
 const path = require("path");
+const { waitForReceipt } = require("./wait_for_receipt");
 
 async function main() {
   // ── Preflight ──────────────────────────────────────────────────────────
@@ -40,18 +41,26 @@ async function main() {
 
   process.stdout.write("Waiting for confirmation");
   const deployTx = contract.deploymentTransaction();
+  if (!deployTx) throw new Error("Deployment transaction was not created");
   const interval = setInterval(() => process.stdout.write("."), 1500);
 
-  await contract.waitForDeployment();
+  const deployReceipt = await waitForReceipt(network.config.url, deployTx.hash);
+  if (deployReceipt.status !== "0x1") {
+    throw new Error(`Deployment transaction reverted: ${deployTx.hash}`);
+  }
   clearInterval(interval);
   console.log(" done.\n");
 
-  const address = await contract.getAddress();
+  const address = ethers.getCreateAddress({
+    from: deployer.address,
+    nonce: deployTx.nonce,
+  });
+  const deployed = Factory.attach(address);
   const txHash  = deployTx?.hash ?? "n/a";
 
   // ── Verify deployment ──────────────────────────────────────────────────
-  const onChainLogger = await contract.authorisedLogger();
-  const onChainOwner  = await contract.owner();
+  const onChainLogger = await deployed.authorisedLogger();
+  const onChainOwner  = await deployed.owner();
 
   console.log("  ✓ Contract deployed");
   console.log(`    Address:  ${address}`);
@@ -74,9 +83,9 @@ async function main() {
 
   // Only attempt if deployer == logger
   if (onChainLogger.toLowerCase() === deployer.address.toLowerCase()) {
-    const logTx = await contract.logSignal(testHash, "agni_finance", "accumulation", 99);
-    await logTx.wait();
-    const [valid] = await contract.verify(0, testPayload);
+    const logTx = await deployed.logSignal(testHash, "agni_finance", "accumulation", 99);
+    await waitForReceipt(network.config.url, logTx.hash);
+    const [valid] = await deployed.verify(0, testPayload);
     if (!valid) throw new Error("Smoke test FAILED: verify() returned false");
     console.log("  ✓ Smoke test passed (logSignal + verify)");
   } else {
