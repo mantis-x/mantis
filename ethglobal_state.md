@@ -6,7 +6,7 @@ Last updated: 2026-09-26
 
 **Stage:** Code implementation complete; sandbox verification and submission work remain.
 
-**Overall readiness:** Code-ready, not submission-ready.
+**Overall readiness:** World demo-ready; ETHGlobal submission assets and partner forms remain.
 
 ## Product narrative
 
@@ -108,20 +108,15 @@ Scout signal
 
 ## Known blockers
 
-1. World sandbox credentials and exact verification endpoint are not configured.
-2. No client-facing approval prompt is wired into a live demo flow yet.
-3. Full pytest cannot run until pytest is installed in the environment.
-4. Demo video and sponsor form submissions are external actions still pending.
+1. Uniswap live/testnet approved swap evidence is still pending; current protected execution evidence is dry-run.
+2. Final ETHGlobal assets (logo, banner, screenshots, video) and sponsor form submissions are external actions still pending.
 
 ## Next actions
 
-1. Configure `WORLD_ID_CLIENT_ID`, `WORLD_ID_CLIENT_SECRET`, `WORLD_ID_STATE_SECRET`, and the API callback URI.
-2. Update the World portal redirect URI to `https://api.mantis.baiq.tech/auth/world/callback`.
-3. Run the World sandbox happy path and record the verification response shape.
-4. Run denied/expired paths and confirm no Uniswap call occurs.
-5. Run one approved Arbitrum dry-run/live-safe swap and capture AgentIdentity output.
-6. Install pytest and run the full repository test suite.
-7. Finish team/social metadata, developer feedback form, demo video, and submissions.
+1. Record the 2–4 minute demo covering World approval, approved dry-run, expiry rejection, and intent mismatch.
+2. Finish ETHGlobal team/social metadata, logo, banner, and three screenshots.
+3. Submit the World entry and complete the Uniswap Developer Feedback Form.
+4. Submit the final ETHGlobal project before the deadline.
 
 ## Important configuration
 
